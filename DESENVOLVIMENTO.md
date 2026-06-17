@@ -437,12 +437,9 @@ Acessar `http://localhost:8000/docs` para:
 ### Verificar Banco de Dados
 
 ```bash
-# Instalar ferramenta SQLite (opcional)
-pip install sqlite3
-
-# Inspecionar banco
-sqlite3 backend/feedrh.db
-.tables
+# Inspecionar banco PostgreSQL no container
+docker-compose exec db psql -U feedrh -d feedrh
+\dt
 SELECT * FROM users;
 ```
 
@@ -532,7 +529,7 @@ function validateEmail(email: string): boolean {
 ### Backend (.env)
 ```env
 # Database
-DB_URL=sqlite:///./feedrh.db
+DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
 
 # API
 API_PORT=8000

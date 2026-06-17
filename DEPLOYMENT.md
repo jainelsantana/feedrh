@@ -62,6 +62,24 @@ CMD ["fastapi", "run", "main.py", "--port", "8000"]
 version: '3.8'
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: feedrh
+      POSTGRES_USER: feedrh
+      POSTGRES_PASSWORD: feedrh
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedrh -d feedrh"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - feedrh-network
+
   backend:
     build:
       context: ./backend
@@ -71,7 +89,10 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DB_URL=sqlite:///./feedrh.db
+      DB_URL: postgresql+psycopg2://feedrh:feedrh@db:5432/feedrh
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - feedrh-network
 
@@ -89,6 +110,9 @@ services:
 networks:
   feedrh-network:
     driver: bridge
+
+volumes:
+  postgres_data:
 ```
 
 ---
@@ -406,13 +430,13 @@ def login(request: Request, credentials: LoginSchema, db: Session = Depends(get_
 ```bash
 # Usar .env.example para documentar
 # .env.example (commitar no repositório)
-DB_URL=sqlite:///./feedrh.db
+DB_URL=postgresql+psycopg2://feedrh:feedrh@db:5432/feedrh
 SECRET_KEY=change-me-in-production
 JWT_ALGORITHM=HS256
 DEBUG=False
 
 # .env (NÃO commitar, adicionar ao .gitignore)
-DB_URL=postgresql://user:pass@db:5432/feedrh
+DB_URL=postgresql+psycopg2://user:pass@db:5432/feedrh
 SECRET_KEY=super-secret-key-production
 JWT_ALGORITHM=HS256
 DEBUG=False
@@ -431,11 +455,11 @@ from sqlalchemy import create_engine
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "sqlite:///./feedrh.db"
+    "postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh"
 )
 
 # Para PostgreSQL
-DATABASE_URL = "postgresql://user:password@localhost/feedrh"
+DATABASE_URL = "postgresql+psycopg2://user:password@localhost:5432/feedrh"
 
 engine = create_engine(DATABASE_URL)
 ```
@@ -493,18 +517,12 @@ docker run -it feedrh-backend:latest bash
 docker image inspect feedrh-backend:latest
 ```
 
-### Banco de dados corrompido
+### Reset do banco de dados local
 
 ```bash
-# Backup do banco
-cp feedrh.db feedrh.db.backup
-
-# Restaurar backup
-cp feedrh.db.backup feedrh.db
-
-# Ou resetar (perderá dados)
-rm feedrh.db
-# Reiniciar container para recriar tables
+# Remove containers e volume local do PostgreSQL (perderá dados)
+docker-compose down -v
+docker-compose up -d --build
 ```
 
 ### Performance lenta

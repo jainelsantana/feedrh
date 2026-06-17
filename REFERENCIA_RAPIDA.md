@@ -157,9 +157,7 @@ GET    /api/empresas        → Listar empresas
         ORM / SQLAlchemy
                    │
 ┌──────────────────▼──────────────────────────┐
-│      SQLite Database (development)          │
-│                                             │
-│      PostgreSQL (production)                │
+│      PostgreSQL Database                    │
 └─────────────────────────────────────────────┘
 ```
 
@@ -279,10 +277,10 @@ console.timeEnd('timer');   // Termina timer
 ### Database Debug
 
 ```bash
-sqlite3 feedrh.db
-.tables
+docker-compose exec db psql -U feedrh -d feedrh
+\dt
 SELECT * FROM users;
-.schema users
+\d users
 ```
 
 ---

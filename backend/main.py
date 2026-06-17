@@ -1,9 +1,9 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
-from pydantic import BaseModel, model_validator
+from fastapi import FastAPI, HTTPException, Depends, Header, Query
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional
 from datetime import datetime
 from email.message import EmailMessage
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy import create_engine, inspect, Column, Integer, String, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
@@ -12,8 +12,25 @@ import os
 import smtplib
 
 # Database Setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./feedrh.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+DEFAULT_DATABASE_URL = "postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh"
+SQLALCHEMY_DATABASE_URL = (
+    os.getenv("DB_URL")
+    or os.getenv("DATABASE_URL")
+    or DEFAULT_DATABASE_URL
+)
+
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
+        "postgres://",
+        "postgresql://",
+        1,
+    )
+
+connect_args = {}
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 logging.basicConfig(level=logging.INFO)
@@ -63,24 +80,37 @@ class VagaModel(Base):
     justificativa_substituicao = Column(String, nullable=True)
     solicitante_id = Column(Integer)
     status_decisao_diretoria = Column(String, default="Pendente")
+    justificativa_negativa = Column(String, nullable=True)
     quantidade_congelamentos = Column(Integer, default=0)
     etapa_funil = Column(Integer, default=1)
     data_finalizacao = Column(DateTime, nullable=True)
 
+class VagaHistoricoModel(Base):
+    __tablename__ = "vagas_historico"
+    id = Column(Integer, primary_key=True, index=True)
+    vaga_id = Column(Integer, index=True)
+    data_registro = Column(DateTime, default=datetime.utcnow)
+    usuario_id = Column(Integer)
+    usuario_nome = Column(String)
+    acao = Column(String)
+    status_anterior = Column(String, nullable=True)
+    status_novo = Column(String, nullable=True)
+    justificativa = Column(String, nullable=True)
+
 Base.metadata.create_all(bind=engine)
 
 def garantir_colunas_vagas():
-    with engine.connect() as connection:
-        colunas = [row[1] for row in connection.exec_driver_sql("PRAGMA table_info(vagas)").fetchall()]
+    colunas = {coluna["name"] for coluna in inspect(engine).get_columns("vagas")}
+
+    with engine.begin() as connection:
         if "quantidade_congelamentos" not in colunas:
             connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN quantidade_congelamentos INTEGER DEFAULT 0")
-            connection.commit()
         if "resumo_requisitos" not in colunas:
             connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN resumo_requisitos TEXT DEFAULT ''")
-            connection.commit()
         if "requisitos_obrigatorios" not in colunas:
             connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN requisitos_obrigatorios TEXT DEFAULT ''")
-            connection.commit()
+        if "justificativa_negativa" not in colunas:
+            connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN justificativa_negativa TEXT")
         connection.exec_driver_sql(
             "UPDATE vagas SET quantidade_congelamentos = 1 "
             "WHERE status_decisao_diretoria = 'Congelada' "
@@ -88,7 +118,6 @@ def garantir_colunas_vagas():
         )
         connection.exec_driver_sql("UPDATE vagas SET resumo_requisitos = '' WHERE resumo_requisitos IS NULL")
         connection.exec_driver_sql("UPDATE vagas SET requisitos_obrigatorios = '' WHERE requisitos_obrigatorios IS NULL")
-        connection.commit()
 
 garantir_colunas_vagas()
 
@@ -140,6 +169,19 @@ class EmpresaResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class VagaHistoricoResponse(BaseModel):
+    id: int
+    data_registro: datetime
+    usuario_id: int
+    usuario_nome: str
+    acao: str
+    status_anterior: Optional[str] = None
+    status_novo: Optional[str] = None
+    justificativa: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class VagaCreate(BaseModel):
     cargo: str
     empresa_destinada: str
@@ -175,17 +217,22 @@ class VagaResponse(BaseModel):
     profissional_substituido: Optional[str] = None
     justificativa_substituicao: Optional[str] = None
     solicitante_id: int
+    solicitante_nome: Optional[str] = None
+    solicitante_email: Optional[str] = None
     status_decisao_diretoria: str
+    justificativa_negativa: Optional[str] = None
     quantidade_congelamentos: int = 0
     etapa_funil: int
     data_finalizacao: Optional[datetime] = None
     posicao_fila_rh: Optional[int] = None
+    historico: List[VagaHistoricoResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
 
 class DecisaoDiretoriaUpdate(BaseModel):
     status: str
+    justificativa_negativa: Optional[str] = None
 
 class EtapaFunilUpdate(BaseModel):
     etapa: int
@@ -225,7 +272,27 @@ def require_rh(current_user: UserModel = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Acesso negado. Apenas usuários do RH possuem acesso a esta ação.")
     return current_user
 
-def preencher_posicoes_fila_rh(db: Session, vagas: List[VagaModel]) -> List[VagaModel]:
+def parse_data_filtro(valor: Optional[str], campo: str) -> Optional[datetime]:
+    if not valor:
+        return None
+    try:
+        return datetime.strptime(valor, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{campo} deve estar no formato YYYY-MM-DD")
+
+def aplicar_filtros_vagas(query, gestor_id: Optional[int], data_inicio: Optional[str], data_fim: Optional[str]):
+    data_inicio_dt = parse_data_filtro(data_inicio, "data_inicio")
+    data_fim_dt = parse_data_filtro(data_fim, "data_fim")
+
+    if gestor_id is not None:
+        query = query.filter(VagaModel.solicitante_id == gestor_id)
+    if data_inicio_dt:
+        query = query.filter(VagaModel.data_abertura >= data_inicio_dt)
+    if data_fim_dt:
+        query = query.filter(VagaModel.data_abertura <= data_fim_dt.replace(hour=23, minute=59, second=59, microsecond=999999))
+    return query
+
+def preencher_dados_vagas(db: Session, vagas: List[VagaModel]) -> List[VagaModel]:
     fila_rh = (
         db.query(VagaModel)
         .filter(VagaModel.status_decisao_diretoria == "Pendente")
@@ -233,8 +300,33 @@ def preencher_posicoes_fila_rh(db: Session, vagas: List[VagaModel]) -> List[Vaga
         .all()
     )
     posicoes = {vaga.id: indice for indice, vaga in enumerate(fila_rh, start=1)}
+
+    solicitante_ids = {vaga.solicitante_id for vaga in vagas}
+    usuarios = {}
+    if solicitante_ids:
+        usuarios = {
+            usuario.id: usuario
+            for usuario in db.query(UserModel).filter(UserModel.id.in_(solicitante_ids)).all()
+        }
+
+    vaga_ids = [vaga.id for vaga in vagas]
+    historico_por_vaga = {vaga_id: [] for vaga_id in vaga_ids}
+    if vaga_ids:
+        registros = (
+            db.query(VagaHistoricoModel)
+            .filter(VagaHistoricoModel.vaga_id.in_(vaga_ids))
+            .order_by(VagaHistoricoModel.data_registro.asc(), VagaHistoricoModel.id.asc())
+            .all()
+        )
+        for registro in registros:
+            historico_por_vaga.setdefault(registro.vaga_id, []).append(registro)
+
     for vaga in vagas:
+        solicitante = usuarios.get(vaga.solicitante_id)
+        vaga.solicitante_nome = solicitante.nome if solicitante else "Usuário removido"
+        vaga.solicitante_email = solicitante.email if solicitante else None
         vaga.posicao_fila_rh = posicoes.get(vaga.id)
+        vaga.historico = historico_por_vaga.get(vaga.id, [])
     return vagas
 
 def normalizar_nome_empresa(nome: str) -> str:
@@ -343,7 +435,7 @@ def notificar_avanco_etapa(db: Session, vaga: VagaModel, etapa_anterior: int, no
 
     enviar_email_notificacao(solicitante.email, assunto, corpo)
 
-# Seed: Delete DB on startup to recreate with senha_hash column
+# Seed default data on an empty database
 @app.on_event("startup")
 def startup_event():
     db = SessionLocal()
@@ -542,21 +634,24 @@ def create_vaga(vaga: VagaCreate, db: Session = Depends(get_db), current_user: U
     db.add(db_vaga)
     db.commit()
     db.refresh(db_vaga)
-    preencher_posicoes_fila_rh(db, [db_vaga])
-    return db_vaga
+    return preencher_dados_vagas(db, [db_vaga])[0]
 
 @app.get("/vagas", response_model=List[VagaResponse])
-def get_vagas(db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+def get_vagas(
+    gestor_id: Optional[int] = Query(None),
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
     if current_user.perfil == "RH":
-        vagas = db.query(VagaModel).order_by(VagaModel.data_abertura.asc(), VagaModel.id.asc()).all()
-        return preencher_posicoes_fila_rh(db, vagas)
-    vagas = (
-        db.query(VagaModel)
-        .filter(VagaModel.solicitante_id == current_user.id)
-        .order_by(VagaModel.data_abertura.asc(), VagaModel.id.asc())
-        .all()
-    )
-    return preencher_posicoes_fila_rh(db, vagas)
+        query = db.query(VagaModel)
+        query = aplicar_filtros_vagas(query, gestor_id, data_inicio, data_fim)
+    else:
+        query = db.query(VagaModel).filter(VagaModel.solicitante_id == current_user.id)
+        query = aplicar_filtros_vagas(query, None, data_inicio, data_fim)
+    vagas = query.order_by(VagaModel.data_abertura.asc(), VagaModel.id.asc()).all()
+    return preencher_dados_vagas(db, vagas)
 
 @app.patch("/vagas/{vaga_id}/decisao-diretoria", response_model=VagaResponse)
 def update_decisao_diretoria(vaga_id: int, update: DecisaoDiretoriaUpdate, db: Session = Depends(get_db), current_user: UserModel = Depends(require_rh)):
@@ -565,14 +660,29 @@ def update_decisao_diretoria(vaga_id: int, update: DecisaoDiretoriaUpdate, db: S
         raise HTTPException(status_code=404, detail="Vaga não encontrada")
     if update.status not in ["Pendente", "Aprovada", "Congelada", "Negada"]:
         raise HTTPException(status_code=400, detail="Status de decisão inválido")
+    justificativa_negativa = (update.justificativa_negativa or "").strip()
+    if update.status == "Negada" and not justificativa_negativa:
+        raise HTTPException(status_code=400, detail="Informe a justificativa para negar a vaga")
+
     status_anterior = db_vaga.status_decisao_diretoria
     db_vaga.status_decisao_diretoria = update.status
+    if update.status == "Negada":
+        db_vaga.justificativa_negativa = justificativa_negativa
     if update.status == "Congelada" and status_anterior != "Congelada":
         db_vaga.quantidade_congelamentos = (db_vaga.quantidade_congelamentos or 0) + 1
+    if status_anterior != update.status or update.status == "Negada":
+        db.add(VagaHistoricoModel(
+            vaga_id=db_vaga.id,
+            usuario_id=current_user.id,
+            usuario_nome=current_user.nome,
+            acao="Decisão do RH",
+            status_anterior=status_anterior,
+            status_novo=update.status,
+            justificativa=justificativa_negativa or None,
+        ))
     db.commit()
     db.refresh(db_vaga)
-    preencher_posicoes_fila_rh(db, [db_vaga])
-    return db_vaga
+    return preencher_dados_vagas(db, [db_vaga])[0]
 
 @app.patch("/vagas/{vaga_id}/etapa-funil", response_model=VagaResponse)
 def update_etapa_funil(vaga_id: int, update: EtapaFunilUpdate, db: Session = Depends(get_db), current_user: UserModel = Depends(require_rh)):
@@ -591,20 +701,44 @@ def update_etapa_funil(vaga_id: int, update: EtapaFunilUpdate, db: Session = Dep
     db.refresh(db_vaga)
     if update.etapa > etapa_anterior:
         notificar_avanco_etapa(db, db_vaga, etapa_anterior, update.etapa)
-    preencher_posicoes_fila_rh(db, [db_vaga])
-    return db_vaga
+    return preencher_dados_vagas(db, [db_vaga])[0]
 
 @app.get("/vagas/relatorio")
-def get_relatorio(db: Session = Depends(get_db), current_user: UserModel = Depends(require_rh)):
-    vagas = db.query(VagaModel).all()
-    por_empresa, por_senioridade, por_etapa = {}, {}, {}
+def get_relatorio(
+    gestor_id: Optional[int] = Query(None),
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_rh)
+):
+    query = aplicar_filtros_vagas(db.query(VagaModel), gestor_id, data_inicio, data_fim)
+    vagas = query.order_by(VagaModel.data_abertura.asc(), VagaModel.id.asc()).all()
+    vagas = preencher_dados_vagas(db, vagas)
+    por_empresa, por_senioridade, por_etapa, por_gestor = {}, {}, {}, {}
+    vagas_detalhadas = []
     finalizadas_no_mes = 0
     now = datetime.utcnow()
     for v in vagas:
+        gestor_nome = v.solicitante_nome or f"Gestor #{v.solicitante_id}"
         por_empresa[v.empresa_destinada] = por_empresa.get(v.empresa_destinada, 0) + 1
         por_senioridade[v.senioridade] = por_senioridade.get(v.senioridade, 0) + 1
         nome_etapa = ETAPAS_FUNIL.get(v.etapa_funil, "Desconhecida")
         por_etapa[nome_etapa] = por_etapa.get(nome_etapa, 0) + 1
+        por_gestor[gestor_nome] = por_gestor.get(gestor_nome, 0) + 1
+        vagas_detalhadas.append({
+            "id": v.id,
+            "cargo": v.cargo,
+            "gestor_id": v.solicitante_id,
+            "gestor_nome": gestor_nome,
+            "gestor_email": v.solicitante_email,
+            "data_abertura": v.data_abertura,
+            "empresa_destinada": v.empresa_destinada,
+            "senioridade": v.senioridade,
+            "status_decisao_diretoria": v.status_decisao_diretoria,
+            "etapa_funil": v.etapa_funil,
+            "etapa_nome": nome_etapa,
+            "justificativa_negativa": v.justificativa_negativa,
+        })
         if v.etapa_funil == 9 and v.data_finalizacao:
             if v.data_finalizacao.year == now.year and v.data_finalizacao.month == now.month:
                 finalizadas_no_mes += 1
@@ -616,5 +750,7 @@ def get_relatorio(db: Session = Depends(get_db), current_user: UserModel = Depen
         "total_finalizadas_no_mes": finalizadas_no_mes,
         "agrupado_por_empresa": por_empresa,
         "agrupado_por_senioridade": por_senioridade,
-        "agrupado_por_etapa": por_etapa
+        "agrupado_por_etapa": por_etapa,
+        "agrupado_por_gestor": por_gestor,
+        "vagas": vagas_detalhadas,
     }

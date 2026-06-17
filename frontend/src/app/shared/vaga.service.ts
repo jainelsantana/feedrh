@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 
@@ -15,11 +15,47 @@ export interface Vaga {
   profissional_substituido?: string;
   justificativa_substituicao?: string;
   solicitante_id: number;
+  solicitante_nome?: string;
+  solicitante_email?: string;
   status_decisao_diretoria: string;
+  justificativa_negativa?: string;
   quantidade_congelamentos: number;
   etapa_funil: number;
   data_finalizacao?: string;
   posicao_fila_rh?: number | null;
+  historico?: VagaHistorico[];
+}
+
+export interface VagaHistorico {
+  id: number;
+  data_registro: string;
+  usuario_id: number;
+  usuario_nome: string;
+  acao: string;
+  status_anterior?: string | null;
+  status_novo?: string | null;
+  justificativa?: string | null;
+}
+
+export interface VagaFiltros {
+  gestor_id?: number | null;
+  data_inicio?: string;
+  data_fim?: string;
+}
+
+export interface RelatorioVaga {
+  id: number;
+  cargo: string;
+  gestor_id: number;
+  gestor_nome: string;
+  gestor_email?: string | null;
+  data_abertura: string;
+  empresa_destinada: string;
+  senioridade: string;
+  status_decisao_diretoria: string;
+  etapa_funil: number;
+  etapa_nome: string;
+  justificativa_negativa?: string | null;
 }
 
 export interface Relatorio {
@@ -31,6 +67,8 @@ export interface Relatorio {
   agrupado_por_empresa: { [key: string]: number };
   agrupado_por_senioridade: { [key: string]: number };
   agrupado_por_etapa: { [key: string]: number };
+  agrupado_por_gestor: { [key: string]: number };
+  vagas: RelatorioVaga[];
 }
 
 @Injectable({
@@ -48,23 +86,50 @@ export class VagaService {
     });
   }
 
-  getVagas(): Observable<Vaga[]> {
-    return this.http.get<Vaga[]>(this.apiUrl, { headers: this.getHeaders() });
+  private getParams(filtros?: VagaFiltros): HttpParams {
+    let params = new HttpParams();
+    if (!filtros) {
+      return params;
+    }
+    if (filtros.gestor_id) {
+      params = params.set('gestor_id', filtros.gestor_id.toString());
+    }
+    if (filtros.data_inicio) {
+      params = params.set('data_inicio', filtros.data_inicio);
+    }
+    if (filtros.data_fim) {
+      params = params.set('data_fim', filtros.data_fim);
+    }
+    return params;
   }
 
-  createVaga(vaga: Omit<Vaga, 'id' | 'data_abertura' | 'solicitante_id' | 'status_decisao_diretoria' | 'quantidade_congelamentos' | 'etapa_funil' | 'posicao_fila_rh'>): Observable<Vaga> {
+  getVagas(filtros?: VagaFiltros): Observable<Vaga[]> {
+    return this.http.get<Vaga[]>(this.apiUrl, {
+      headers: this.getHeaders(),
+      params: this.getParams(filtros)
+    });
+  }
+
+  createVaga(vaga: Omit<Vaga, 'id' | 'data_abertura' | 'solicitante_id' | 'solicitante_nome' | 'solicitante_email' | 'status_decisao_diretoria' | 'justificativa_negativa' | 'quantidade_congelamentos' | 'etapa_funil' | 'data_finalizacao' | 'posicao_fila_rh' | 'historico'>): Observable<Vaga> {
     return this.http.post<Vaga>(this.apiUrl, vaga, { headers: this.getHeaders() });
   }
 
-  updateDecisaoDiretoria(id: number, status: string): Observable<Vaga> {
-    return this.http.patch<Vaga>(`${this.apiUrl}/${id}/decisao-diretoria`, { status }, { headers: this.getHeaders() });
+  updateDecisaoDiretoria(id: number, status: string, justificativa_negativa?: string): Observable<Vaga> {
+    return this.http.patch<Vaga>(
+      `${this.apiUrl}/${id}/decisao-diretoria`,
+      { status, justificativa_negativa },
+      { headers: this.getHeaders() }
+    );
   }
 
   updateEtapaFunil(id: number, etapa: number): Observable<Vaga> {
     return this.http.patch<Vaga>(`${this.apiUrl}/${id}/etapa-funil`, { etapa }, { headers: this.getHeaders() });
   }
 
-  getRelatorio(): Observable<Relatorio> {
-    return this.http.get<Relatorio>(`${this.apiUrl}/relatorio`, { headers: this.getHeaders() });
+  getRelatorio(filtros?: VagaFiltros): Observable<Relatorio> {
+    return this.http.get<Relatorio>(`${this.apiUrl}/relatorio`, {
+      headers: this.getHeaders(),
+      params: this.getParams(filtros)
+    });
   }
 }

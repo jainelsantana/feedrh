@@ -1,6 +1,20 @@
-version: '3.8'
-
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: feedrh
+      POSTGRES_USER: feedrh
+      POSTGRES_PASSWORD: feedrh
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedrh -d feedrh"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -10,7 +24,10 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DB_URL=sqlite:///./feedrh.db
+      DB_URL: postgresql+psycopg2://feedrh:feedrh@db:5432/feedrh
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:
@@ -18,3 +35,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "4200:80"
+
+volumes:
+  postgres_data:

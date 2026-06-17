@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { VagaService, Vaga } from '../../shared/vaga.service';
 
 @Component({
   selector: 'app-decision-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="max-w-6xl mx-auto px-4 py-8">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
@@ -73,7 +74,7 @@ import { VagaService, Vaga } from '../../shared/vaga.service';
             <button (click)="decidir(vaga.id, 'Congelada')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2 px-3 rounded-lg border border-blue-200 transition-colors flex items-center justify-center gap-1 text-sm">
               <span class="material-icons text-base">pause</span> Congelar
             </button>
-            <button (click)="decidir(vaga.id, 'Negada')" class="flex-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold py-2 px-3 rounded-lg border border-red-200 transition-colors flex items-center justify-center gap-1 text-sm">
+            <button (click)="abrirModalNegativa(vaga)" class="flex-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold py-2 px-3 rounded-lg border border-red-200 transition-colors flex items-center justify-center gap-1 text-sm">
               <span class="material-icons text-base">block</span> Negar
             </button>
           </div>
@@ -124,12 +125,46 @@ import { VagaService, Vaga } from '../../shared/vaga.service';
           </div>
         </div>
       </div>
+
+      <div *ngIf="vagaParaNegar as vagaNegativa" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-rh-gray-purple">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+              <span class="material-icons text-red-600">block</span>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-rh-dark">Justificar negativa</h3>
+              <p class="text-sm text-gray-500 mt-1">Vaga: {{ vagaNegativa.cargo }}</p>
+            </div>
+          </div>
+
+          <label class="block">
+            <span class="text-xs font-bold text-gray-500 uppercase">Justificativa obrigatoria</span>
+            <textarea [(ngModel)]="justificativaNegativa" rows="5"
+              class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 resize-none"
+              placeholder="Informe o motivo da negativa"></textarea>
+          </label>
+          <p *ngIf="erroJustificativa" class="text-sm text-red-600 font-semibold mt-2">{{ erroJustificativa }}</p>
+
+          <div class="flex flex-col sm:flex-row gap-2 justify-end mt-5">
+            <button (click)="fecharModalNegativa()" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button (click)="confirmarNegativa()" class="px-4 py-2 rounded-lg bg-red-600 text-white font-bold hover:bg-red-700">
+              Negar vaga
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `
 })
 export class DecisionPanelComponent implements OnInit {
   vagasPendentes: Vaga[] = [];
   vagasCongeladas: Vaga[] = [];
+  vagaParaNegar: Vaga | null = null;
+  justificativaNegativa = '';
+  erroJustificativa = '';
 
   constructor(private vagaService: VagaService, private router: Router) {}
 
@@ -162,6 +197,41 @@ export class DecisionPanelComponent implements OnInit {
         this.carregarVagasPendentes();
       },
       error: (err) => alert(err.error?.detail || 'Erro ao salvar decisão da diretoria.')
+    });
+  }
+
+  abrirModalNegativa(vaga: Vaga): void {
+    this.vagaParaNegar = vaga;
+    this.justificativaNegativa = '';
+    this.erroJustificativa = '';
+  }
+
+  fecharModalNegativa(): void {
+    this.vagaParaNegar = null;
+    this.justificativaNegativa = '';
+    this.erroJustificativa = '';
+  }
+
+  confirmarNegativa(): void {
+    const justificativa = this.justificativaNegativa.trim();
+    const vagaParaNegar = this.vagaParaNegar;
+    if (!vagaParaNegar) {
+      return;
+    }
+    if (!justificativa) {
+      this.erroJustificativa = 'Informe a justificativa para negar a vaga.';
+      return;
+    }
+
+    this.vagaService.updateDecisaoDiretoria(vagaParaNegar.id, 'Negada', justificativa).subscribe({
+      next: () => {
+        alert('Vaga negada com justificativa registrada.');
+        this.fecharModalNegativa();
+        this.carregarVagasPendentes();
+      },
+      error: (err) => {
+        this.erroJustificativa = err.error?.detail || 'Erro ao salvar decisão da diretoria.';
+      }
     });
   }
 

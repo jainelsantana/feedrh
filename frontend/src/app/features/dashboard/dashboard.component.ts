@@ -1,12 +1,23 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { VagaService, Vaga } from '../../shared/vaga.service';
 import { AuthService } from '../../core/auth.service';
+
+interface GestorFiltro {
+  id: number;
+  nome: string;
+}
+
+interface EtapaPendente {
+  vaga: Vaga;
+  novaEtapa: number;
+}
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="max-w-6xl mx-auto px-4 py-8">
 
@@ -22,6 +33,38 @@ import { AuthService } from '../../core/auth.service';
           <span class="material-icons text-rh-purple text-base">account_circle</span>
           <span class="text-sm font-semibold text-gray-700">{{ usuarioNome }}</span>
           <span class="text-xs bg-rh-purple text-white font-bold px-2 py-0.5 rounded-full">{{ userPerfil }}</span>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="bg-white border border-rh-gray-purple rounded-2xl shadow-sm p-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <label *ngIf="userPerfil === 'RH'" class="flex flex-col gap-1">
+            <span class="text-xs font-bold text-gray-500 uppercase">Gestor</span>
+            <select [(ngModel)]="filtroGestorId" (ngModelChange)="aplicarFiltros()"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rh-purple/30">
+              <option [ngValue]="null">Todos</option>
+              <option *ngFor="let gestor of gestoresFiltro" [ngValue]="gestor.id">{{ gestor.nome }}</option>
+            </select>
+          </label>
+
+          <label class="flex flex-col gap-1">
+            <span class="text-xs font-bold text-gray-500 uppercase">Data inicial</span>
+            <input type="date" [(ngModel)]="filtroDataInicio" (ngModelChange)="aplicarFiltros()"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rh-purple/30">
+          </label>
+
+          <label class="flex flex-col gap-1">
+            <span class="text-xs font-bold text-gray-500 uppercase">Data final</span>
+            <input type="date" [(ngModel)]="filtroDataFim" (ngModelChange)="aplicarFiltros()"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rh-purple/30">
+          </label>
+
+          <button (click)="limparFiltros()"
+            class="border border-gray-200 rounded-lg px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+            <span class="material-icons text-base">filter_alt_off</span>
+            Limpar
+          </button>
         </div>
       </div>
 
@@ -76,6 +119,7 @@ import { AuthService } from '../../core/auth.service';
                   <span class="flex items-center gap-1"><span class="material-icons text-xs">trending_up</span>{{ vaga.senioridade }}</span>
                   <span class="flex items-center gap-1"><span class="material-icons text-xs">assignment</span>{{ vaga.tipo }}</span>
                   <span class="flex items-center gap-1"><span class="material-icons text-xs">calendar_today</span>{{ vaga.data_abertura | date:'dd/MM/yyyy' }}</span>
+                  <span *ngIf="userPerfil === 'RH'" class="flex items-center gap-1"><span class="material-icons text-xs">person</span>{{ vaga.solicitante_nome || ('Gestor #' + vaga.solicitante_id) }}</span>
                 </div>
               </div>
 
@@ -237,6 +281,55 @@ import { AuthService } from '../../core/auth.service';
             <span class="text-gray-500"><span class="font-semibold">Motivo:</span> {{ vaga.justificativa_substituicao }}</span>
           </div>
 
+          <div *ngIf="vaga.justificativa_negativa" class="px-6 py-4 bg-red-50/70 border-b border-red-100">
+            <h4 class="text-sm font-bold text-red-800 flex items-center gap-2 mb-2">
+              <span class="material-icons text-red-600 text-base">gpp_bad</span>
+              Justificativa da negativa
+            </h4>
+            <p class="text-sm text-red-900 leading-relaxed break-words">{{ vaga.justificativa_negativa }}</p>
+          </div>
+
+          <div *ngIf="vaga.historico?.length" class="px-6 py-4 bg-gray-50">
+            <h4 class="text-sm font-bold text-rh-dark flex items-center gap-2 mb-3">
+              <span class="material-icons text-rh-purple text-base">history</span>
+              Histórico da vaga
+            </h4>
+            <div class="space-y-2">
+              <div *ngFor="let item of (vaga.historico || [])" class="bg-white border border-gray-100 rounded-lg px-3 py-2 text-xs">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                  <span class="font-bold text-gray-700">{{ item.acao }}: {{ item.status_anterior || 'Novo' }} → {{ item.status_novo }}</span>
+                  <span class="text-gray-400">{{ item.data_registro | date:'dd/MM/yyyy HH:mm' }}</span>
+                </div>
+                <p class="text-gray-500 mt-1">Responsável: {{ item.usuario_nome }}</p>
+                <p *ngIf="item.justificativa" class="text-red-800 mt-1 break-words"><strong>Justificativa:</strong> {{ item.justificativa }}</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div *ngIf="etapaPendente as etapaConfirmacao" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-rh-gray-purple">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+              <span class="material-icons text-rh-purple">published_with_changes</span>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-rh-dark">Confirmar avanço de etapa</h3>
+              <p class="text-sm text-gray-500 mt-1">
+                Avançar "{{ etapaConfirmacao.vaga.cargo }}" para "{{ etapas[etapaConfirmacao.novaEtapa - 1] }}"?
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 justify-end">
+            <button (click)="cancelarAvancoEtapa()" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button (click)="confirmarAvancoEtapa()" class="px-4 py-2 rounded-lg bg-rh-purple text-white font-bold hover:bg-purple-700">
+              Confirmar avanço
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -244,6 +337,12 @@ import { AuthService } from '../../core/auth.service';
 })
 export class DashboardComponent implements OnInit {
   vagas: Vaga[] = [];
+  vagasOriginais: Vaga[] = [];
+  gestoresFiltro: GestorFiltro[] = [];
+  filtroGestorId: number | null = null;
+  filtroDataInicio = '';
+  filtroDataFim = '';
+  etapaPendente: EtapaPendente | null = null;
   userPerfil: 'RH' | 'GESTOR' = 'GESTOR';
   usuarioNome = '';
 
@@ -275,22 +374,76 @@ export class DashboardComponent implements OnInit {
 
   carregarVagas(): void {
     this.vagaService.getVagas().subscribe({
-      next: (data) => this.vagas = data,
+      next: (data) => {
+        this.vagasOriginais = data;
+        this.atualizarGestoresFiltro();
+        this.aplicarFiltros();
+      },
       error: (err) => console.error(err)
     });
+  }
+
+  atualizarGestoresFiltro(): void {
+    const gestores = new Map<number, string>();
+    for (const vaga of this.vagasOriginais) {
+      gestores.set(vaga.solicitante_id, vaga.solicitante_nome || `Gestor #${vaga.solicitante_id}`);
+    }
+    this.gestoresFiltro = Array.from(gestores, ([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }
+
+  aplicarFiltros(): void {
+    this.vagas = this.vagasOriginais.filter((vaga) => {
+      const dataAbertura = vaga.data_abertura.slice(0, 10);
+      const gestorOk = this.userPerfil !== 'RH' || !this.filtroGestorId || vaga.solicitante_id === this.filtroGestorId;
+      const inicioOk = !this.filtroDataInicio || dataAbertura >= this.filtroDataInicio;
+      const fimOk = !this.filtroDataFim || dataAbertura <= this.filtroDataFim;
+      return gestorOk && inicioOk && fimOk;
+    });
+  }
+
+  limparFiltros(): void {
+    this.filtroGestorId = null;
+    this.filtroDataInicio = '';
+    this.filtroDataFim = '';
+    this.aplicarFiltros();
   }
 
   alterarEtapa(vaga: Vaga, delta: number): void {
     const novaEtapa = vaga.etapa_funil + delta;
     if (novaEtapa >= 1 && novaEtapa <= 9) {
-      this.vagaService.updateEtapaFunil(vaga.id, novaEtapa).subscribe({
-        next: (updated) => {
-          vaga.etapa_funil = updated.etapa_funil;
-          vaga.data_finalizacao = updated.data_finalizacao;
-        },
-        error: (err) => alert(err.error?.detail || 'Erro ao alterar etapa.')
-      });
+      if (delta > 0) {
+        this.etapaPendente = { vaga, novaEtapa };
+        return;
+      }
+      this.salvarEtapa(vaga, novaEtapa);
     }
+  }
+
+  confirmarAvancoEtapa(): void {
+    const etapaPendente = this.etapaPendente;
+    if (!etapaPendente) {
+      return;
+    }
+    this.salvarEtapa(etapaPendente.vaga, etapaPendente.novaEtapa);
+    this.etapaPendente = null;
+  }
+
+  cancelarAvancoEtapa(): void {
+    this.etapaPendente = null;
+  }
+
+  private salvarEtapa(vaga: Vaga, novaEtapa: number): void {
+    this.vagaService.updateEtapaFunil(vaga.id, novaEtapa).subscribe({
+      next: (updated) => {
+        Object.assign(vaga, updated);
+        const index = this.vagasOriginais.findIndex(item => item.id === vaga.id);
+        if (index >= 0) {
+          this.vagasOriginais[index] = vaga;
+        }
+      },
+      error: (err) => alert(err.error?.detail || 'Erro ao alterar etapa.')
+    });
   }
 
   getIconeEtapa(etapa: number): string {

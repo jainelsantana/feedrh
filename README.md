@@ -43,7 +43,7 @@ FeedRH/
 │
 ├── Backend (FastAPI + SQLAlchemy)
 │   ├── API RESTful
-│   ├── Banco de dados SQLite
+│   ├── Banco de dados PostgreSQL
 │   └── CORS habilitado para frontend
 │
 └── Docker Compose
@@ -68,7 +68,7 @@ FeedRH/
 └──────────────┬──────────────────────┘
                │ ORM
 ┌──────────────▼──────────────────────┐
-│    Banco de Dados (SQLite)          │
+│    Banco de Dados (PostgreSQL)      │
 │  - Tabelas (Users, Vagas, Empresas) │
 └─────────────────────────────────────┘
 ```
@@ -89,7 +89,7 @@ FeedRH/
 - **SQLAlchemy** - ORM para banco de dados
 - **Pydantic** - Validação de dados
 - **Python 3.11** - Linguagem de programação
-- **SQLite** - Banco de dados leve
+- **PostgreSQL** - Banco de dados relacional
 
 ### DevOps
 - **Docker** - Containerização
@@ -158,10 +158,12 @@ cd FeedRH
 # Executar com Docker Compose
 docker-compose up --build
 
-# A aplicação estará disponível em:
-# - Frontend: http://localhost:4200
-# - Backend: http://localhost:8000
-# - API Docs: http://localhost:8000/docs
+A aplicação estará disponível em:
+- Frontend: http://localhost:4200
+- Backend: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+Acesse o frontend diretamente em: http://localhost:4200
 ```
 
 ### Opção 2: Desenvolvimento Local
@@ -316,7 +318,7 @@ POST   /api/empresas       # Criar
 
 ### Backend
 ```env
-DB_URL=sqlite:///./feedrh.db    # URL do banco de dados
+DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
 ```
 
 ### Frontend
@@ -415,8 +417,8 @@ export class ExemploService {
 - Verificar URL da API nos serviços
 
 ### Erro de banco de dados
-- Deletar arquivo `feedrh.db` para resetar banco
-- Verificar permissões de escrita na pasta backend
+- Verificar se o container `db` está saudável
+- Para resetar o PostgreSQL local, parar os containers e remover volumes com `docker-compose down -v`
 - Reiniciar containers Docker
 
 ### Problemas de permissão CORS
@@ -440,7 +442,7 @@ Para dúvidas ou problemas:
 1. Verificar a documentação acima
 2. Consultar logs dos containers: `docker-compose logs`
 3. Verificar console do navegador (DevTools)
-4. Revisar arquivo `feedrh.db` com ferramenta SQLite
+4. Revisar o PostgreSQL com uma ferramenta como DBeaver ou psql
 
 ---
 

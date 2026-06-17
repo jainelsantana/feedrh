@@ -78,7 +78,7 @@ import { VagaService, Relatorio } from '../../shared/vaga.service';
         </div>
 
         <!-- Seção de Agrupamentos -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <!-- Agrupamento por Empresa -->
           <div class="bg-white rounded-2xl shadow-sm border border-rh-gray-purple p-6">
             <h3 class="text-lg font-bold text-rh-dark mb-4 flex items-center gap-2">
@@ -90,6 +90,20 @@ import { VagaService, Relatorio } from '../../shared/vaga.service';
                 <span class="text-sm font-bold bg-purple-50 text-rh-purple px-3 py-1 rounded-full">{{ relatorio.agrupado_por_empresa[item] }}</span>
               </div>
               <div *ngIf="objectKeys(relatorio.agrupado_por_empresa).length === 0" class="text-gray-400 text-sm text-center">Nenhum dado.</div>
+            </div>
+          </div>
+
+          <!-- Agrupamento por Gestor -->
+          <div class="bg-white rounded-2xl shadow-sm border border-rh-gray-purple p-6">
+            <h3 class="text-lg font-bold text-rh-dark mb-4 flex items-center gap-2">
+              <span class="material-icons text-rh-purple text-xl">person</span> Vagas por Gestor
+            </h3>
+            <div class="space-y-3">
+              <div *ngFor="let item of objectKeys(relatorio.agrupado_por_gestor)" class="flex justify-between items-center border-b border-gray-100 pb-2">
+                <span class="text-sm text-gray-700">{{ item }}</span>
+                <span class="text-sm font-bold bg-purple-50 text-rh-purple px-3 py-1 rounded-full">{{ relatorio.agrupado_por_gestor[item] }}</span>
+              </div>
+              <div *ngIf="objectKeys(relatorio.agrupado_por_gestor).length === 0" class="text-gray-400 text-sm text-center">Nenhum dado.</div>
             </div>
           </div>
 
@@ -119,6 +133,55 @@ import { VagaService, Relatorio } from '../../shared/vaga.service';
               </div>
               <div *ngIf="objectKeys(relatorio.agrupado_por_etapa).length === 0" class="text-gray-400 text-sm text-center">Nenhum dado.</div>
             </div>
+          </div>
+        </div>
+
+        <!-- Detalhamento por vaga -->
+        <div class="bg-white rounded-2xl shadow-sm border border-rh-gray-purple overflow-hidden">
+          <div class="p-6 border-b border-gray-100">
+            <h3 class="text-lg font-bold text-rh-dark flex items-center gap-2">
+              <span class="material-icons text-rh-purple text-xl">table_chart</span> Detalhamento por Vaga
+            </h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th class="text-left px-4 py-3">Data</th>
+                  <th class="text-left px-4 py-3">Gestor</th>
+                  <th class="text-left px-4 py-3">Vaga</th>
+                  <th class="text-left px-4 py-3">Empresa</th>
+                  <th class="text-left px-4 py-3">Status</th>
+                  <th class="text-left px-4 py-3">Etapa</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let vaga of relatorio.vagas" class="border-t border-gray-100">
+                  <td class="px-4 py-3 whitespace-nowrap">{{ vaga.data_abertura | date:'dd/MM/yyyy' }}</td>
+                  <td class="px-4 py-3">{{ vaga.gestor_nome }}</td>
+                  <td class="px-4 py-3 font-semibold text-gray-800">{{ vaga.cargo }}</td>
+                  <td class="px-4 py-3">{{ vaga.empresa_destinada }}</td>
+                  <td class="px-4 py-3">
+                    <span class="text-xs font-bold px-2 py-1 rounded-full"
+                      [ngClass]="{
+                        'bg-yellow-100 text-yellow-800': vaga.status_decisao_diretoria === 'Pendente',
+                        'bg-green-100 text-green-800': vaga.status_decisao_diretoria === 'Aprovada',
+                        'bg-blue-100 text-blue-800': vaga.status_decisao_diretoria === 'Congelada',
+                        'bg-red-100 text-red-800': vaga.status_decisao_diretoria === 'Negada'
+                      }">
+                      {{ vaga.status_decisao_diretoria }}
+                    </span>
+                    <p *ngIf="vaga.justificativa_negativa" class="text-xs text-red-700 mt-1 max-w-xs break-words">
+                      {{ vaga.justificativa_negativa }}
+                    </p>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">{{ vaga.etapa_nome }}</td>
+                </tr>
+                <tr *ngIf="relatorio.vagas.length === 0">
+                  <td colspan="6" class="px-4 py-8 text-center text-gray-400">Nenhum dado.</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
