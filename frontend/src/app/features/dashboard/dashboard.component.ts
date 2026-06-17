@@ -212,6 +212,24 @@ import { AuthService } from '../../core/auth.service';
             </p>
           </div>
 
+          <!-- Requisitos da vaga -->
+          <div class="px-6 py-4 bg-white border-b border-gray-100">
+            <h4 class="text-sm font-bold text-rh-dark flex items-center gap-2 mb-3">
+              <span class="material-icons text-rh-purple text-base">fact_check</span>
+              Requisitos da vaga
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase mb-1">Resumo</p>
+                <p class="text-gray-700 leading-relaxed break-words">{{ vaga.resumo_requisitos || 'Não informado' }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-400 uppercase mb-1">Obrigatórios</p>
+                <p class="text-gray-700 leading-relaxed break-words">{{ vaga.requisitos_obrigatorios || 'Não informado' }}</p>
+              </div>
+            </div>
+          </div>
+
           <!-- Info de substituição -->
           <div *ngIf="vaga.tipo === 'Substituição'" class="px-6 py-3 bg-orange-50/50 border-b border-orange-100 text-sm flex flex-col sm:flex-row gap-2">
             <span class="text-orange-700"><span class="font-semibold">Substituindo:</span> {{ vaga.profissional_substituido }}</span>

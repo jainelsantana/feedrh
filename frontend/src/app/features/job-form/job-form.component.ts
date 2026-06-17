@@ -9,6 +9,8 @@ export interface VagaFormState {
   cargo: string;
   empresa_destinada: string;
   senioridade: string;
+  resumo_requisitos: string;
+  requisitos_obrigatorios: string;
   tipo: string;
   profissional_substituido?: string;
   justificativa_substituicao?: string;
@@ -19,7 +21,7 @@ export interface VagaFormState {
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="max-w-2xl mx-auto px-4 py-8">
+    <div class="max-w-3xl mx-auto px-4 py-8">
       <div class="bg-white rounded-2xl shadow-sm border border-rh-gray-purple p-8">
         <div class="flex items-center gap-3 mb-6">
           <span class="material-icons text-rh-purple text-3xl">add_box</span>
@@ -63,6 +65,35 @@ export interface VagaFormState {
                 <option value="Especialista / Lead">Especialista / Lead</option>
               </select>
               <p *ngIf="seniorityRef.invalid && seniorityRef.touched" class="text-xs text-red-500 mt-1">A senioridade é obrigatória.</p>
+            </div>
+          </div>
+
+          <!-- Requisitos da Vaga -->
+          <div class="p-6 bg-purple-50/40 rounded-xl border border-purple-100 space-y-4">
+            <div class="flex items-start gap-3">
+              <span class="material-icons text-rh-purple text-2xl">fact_check</span>
+              <div>
+                <h3 class="text-lg font-bold text-rh-dark">Requisitos da Vaga</h3>
+                <p class="text-sm text-gray-500">Resuma os principais critérios e destaque o que é indispensável para avançar no processo.</p>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-gray-700">Resumo dos Requisitos</label>
+              <textarea name="resumo_requisitos" [(ngModel)]="vaga.resumo_requisitos" required #resumoRef="ngModel"
+                rows="3" placeholder="Ex: Atuação com produto digital, boa comunicação com áreas de negócio e experiência em projetos ágeis."
+                [ngClass]="{'border-red-400 focus:ring-red-200': resumoRef.invalid && resumoRef.touched}"
+                class="mt-1 w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-rh-purple transition-all"></textarea>
+              <p *ngIf="resumoRef.invalid && resumoRef.touched" class="text-xs text-red-500 mt-1">O resumo dos requisitos é obrigatório.</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-gray-700">Requisitos Obrigatórios</label>
+              <textarea name="requisitos_obrigatorios" [(ngModel)]="vaga.requisitos_obrigatorios" required #requisitosRef="ngModel"
+                rows="4" placeholder="Ex: 3+ anos de experiência na função, domínio de Angular, disponibilidade para modelo híbrido."
+                [ngClass]="{'border-red-400 focus:ring-red-200': requisitosRef.invalid && requisitosRef.touched}"
+                class="mt-1 w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-rh-purple transition-all"></textarea>
+              <p *ngIf="requisitosRef.invalid && requisitosRef.touched" class="text-xs text-red-500 mt-1">Informe os requisitos obrigatórios da vaga.</p>
             </div>
           </div>
 
@@ -143,6 +174,8 @@ export class JobFormComponent implements OnInit {
     cargo: '',
     empresa_destinada: '',
     senioridade: '',
+    resumo_requisitos: '',
+    requisitos_obrigatorios: '',
     tipo: 'Nova posição',
     profissional_substituido: '',
     justificativa_substituicao: ''

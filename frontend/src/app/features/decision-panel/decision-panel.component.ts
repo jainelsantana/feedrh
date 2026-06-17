@@ -54,6 +54,11 @@ import { VagaService, Vaga } from '../../shared/vaga.service';
               <span class="material-icons text-xs">business</span> {{ vaga.empresa_destinada }} &bull; {{ vaga.senioridade }}
             </p>
 
+            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 text-xs space-y-2">
+              <p class="text-gray-700 break-words"><strong>Resumo dos requisitos:</strong> {{ vaga.resumo_requisitos || 'Não informado' }}</p>
+              <p class="text-gray-700 break-words"><strong>Obrigatórios:</strong> {{ vaga.requisitos_obrigatorios || 'Não informado' }}</p>
+            </div>
+
             <div *ngIf="vaga.tipo === 'Substituição'" class="p-3 bg-purple-50 rounded-lg border border-purple-100 text-xs mt-3">
               <p class="text-rh-dark"><strong>Substituição:</strong> {{ vaga.profissional_substituido }}</p>
               <p class="text-gray-600 mt-0.5"><strong>Justificativa:</strong> {{ vaga.justificativa_substituicao }}</p>
@@ -100,6 +105,11 @@ import { VagaService, Vaga } from '../../shared/vaga.service';
             <p class="text-sm text-gray-500 flex items-center gap-1 mb-4">
               <span class="material-icons text-xs">business</span> {{ vaga.empresa_destinada }} &bull; {{ vaga.senioridade }}
             </p>
+
+            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 text-xs space-y-2">
+              <p class="text-gray-700 break-words"><strong>Resumo dos requisitos:</strong> {{ vaga.resumo_requisitos || 'Não informado' }}</p>
+              <p class="text-gray-700 break-words"><strong>Obrigatórios:</strong> {{ vaga.requisitos_obrigatorios || 'Não informado' }}</p>
+            </div>
 
             <div *ngIf="vaga.tipo === 'Substituição'" class="p-3 bg-purple-50 rounded-lg border border-purple-100 text-xs mt-3">
               <p class="text-rh-dark"><strong>Substituição:</strong> {{ vaga.profissional_substituido }}</p>

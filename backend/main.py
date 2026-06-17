@@ -2,16 +2,34 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from pydantic import BaseModel, model_validator
 from typing import List, Optional
 from datetime import datetime
+from email.message import EmailMessage
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
+import logging
+import os
+import smtplib
 
 # Database Setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./feedrh.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("feedrh")
+
+ETAPAS_FUNIL = {
+    1: "Fila de Espera",
+    2: "Divulgação",
+    3: "Triagem",
+    4: "Entrevista Inicial",
+    5: "Testes Psicológicos",
+    6: "Parecer Psicológico",
+    7: "Entrevista com Gestor",
+    8: "Aguardando Retorno",
+    9: "Finalizada",
+}
 
 def hash_senha(senha: str) -> str:
     return hashlib.sha256(senha.encode()).hexdigest()
@@ -38,6 +56,8 @@ class VagaModel(Base):
     data_abertura = Column(DateTime, default=datetime.utcnow)
     empresa_destinada = Column(String)
     senioridade = Column(String)
+    resumo_requisitos = Column(String, nullable=True)
+    requisitos_obrigatorios = Column(String, nullable=True)
     tipo = Column(String)  # "Nova posição" ou "Substituição"
     profissional_substituido = Column(String, nullable=True)
     justificativa_substituicao = Column(String, nullable=True)
@@ -55,11 +75,19 @@ def garantir_colunas_vagas():
         if "quantidade_congelamentos" not in colunas:
             connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN quantidade_congelamentos INTEGER DEFAULT 0")
             connection.commit()
+        if "resumo_requisitos" not in colunas:
+            connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN resumo_requisitos TEXT DEFAULT ''")
+            connection.commit()
+        if "requisitos_obrigatorios" not in colunas:
+            connection.exec_driver_sql("ALTER TABLE vagas ADD COLUMN requisitos_obrigatorios TEXT DEFAULT ''")
+            connection.commit()
         connection.exec_driver_sql(
             "UPDATE vagas SET quantidade_congelamentos = 1 "
             "WHERE status_decisao_diretoria = 'Congelada' "
             "AND (quantidade_congelamentos IS NULL OR quantidade_congelamentos = 0)"
         )
+        connection.exec_driver_sql("UPDATE vagas SET resumo_requisitos = '' WHERE resumo_requisitos IS NULL")
+        connection.exec_driver_sql("UPDATE vagas SET requisitos_obrigatorios = '' WHERE requisitos_obrigatorios IS NULL")
         connection.commit()
 
 garantir_colunas_vagas()
@@ -116,12 +144,18 @@ class VagaCreate(BaseModel):
     cargo: str
     empresa_destinada: str
     senioridade: str
+    resumo_requisitos: str
+    requisitos_obrigatorios: str
     tipo: str
     profissional_substituido: Optional[str] = None
     justificativa_substituicao: Optional[str] = None
 
     @model_validator(mode='after')
-    def check_substituicao(self) -> 'VagaCreate':
+    def check_dados_obrigatorios(self) -> 'VagaCreate':
+        if not self.resumo_requisitos or not self.resumo_requisitos.strip():
+            raise ValueError("O resumo dos requisitos é obrigatório.")
+        if not self.requisitos_obrigatorios or not self.requisitos_obrigatorios.strip():
+            raise ValueError("Os requisitos obrigatórios devem ser informados.")
         if self.tipo == "Substituição":
             if not self.profissional_substituido or not self.profissional_substituido.strip():
                 raise ValueError("O profissional substituído é obrigatório para vagas de Substituição.")
@@ -135,6 +169,8 @@ class VagaResponse(BaseModel):
     data_abertura: datetime
     empresa_destinada: str
     senioridade: str
+    resumo_requisitos: Optional[str] = None
+    requisitos_obrigatorios: Optional[str] = None
     tipo: str
     profissional_substituido: Optional[str] = None
     justificativa_substituicao: Optional[str] = None
@@ -245,6 +281,67 @@ def criar_empresa_se_nao_existir(db: Session, nome: str):
     db.commit()
     db.refresh(empresa)
     return empresa
+
+def enviar_email_notificacao(destinatario: str, assunto: str, corpo: str) -> bool:
+    smtp_host = os.getenv("SMTP_HOST")
+    try:
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    except ValueError:
+        logger.warning("SMTP_PORT inválida. Usando porta 587.")
+        smtp_port = 587
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user or "nao-responda@feedrh.local")
+    smtp_use_tls = os.getenv("SMTP_USE_TLS", "true").lower() not in ["0", "false", "no"]
+
+    if not smtp_host:
+        logger.info(
+            "E-mail de notificação simulado para %s | Assunto: %s | Corpo: %s",
+            destinatario,
+            assunto,
+            corpo,
+        )
+        return False
+
+    mensagem = EmailMessage()
+    mensagem["From"] = smtp_from
+    mensagem["To"] = destinatario
+    mensagem["Subject"] = assunto
+    mensagem.set_content(corpo)
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            if smtp_use_tls:
+                server.starttls()
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.send_message(mensagem)
+        logger.info("E-mail de notificação enviado para %s", destinatario)
+        return True
+    except Exception:
+        logger.warning("Não foi possível enviar e-mail de notificação para %s", destinatario, exc_info=True)
+        return False
+
+def notificar_avanco_etapa(db: Session, vaga: VagaModel, etapa_anterior: int, nova_etapa: int) -> None:
+    solicitante = db.query(UserModel).filter(UserModel.id == vaga.solicitante_id).first()
+    if not solicitante:
+        logger.info("Notificação ignorada: solicitante da vaga %s não encontrado.", vaga.id)
+        return
+
+    etapa_origem = ETAPAS_FUNIL.get(etapa_anterior, f"Etapa {etapa_anterior}")
+    etapa_destino = ETAPAS_FUNIL.get(nova_etapa, f"Etapa {nova_etapa}")
+    assunto = f"FeedRH: {vaga.cargo} avançou para {etapa_destino}"
+    corpo = (
+        f"Olá, {solicitante.nome}.\n\n"
+        f"A solicitação da vaga \"{vaga.cargo}\" avançou de \"{etapa_origem}\" para \"{etapa_destino}\".\n\n"
+        f"Empresa: {vaga.empresa_destinada}\n"
+        f"Senioridade: {vaga.senioridade}\n\n"
+        f"Resumo dos requisitos:\n{vaga.resumo_requisitos or 'Não informado'}\n\n"
+        f"Requisitos obrigatórios:\n{vaga.requisitos_obrigatorios or 'Não informado'}\n\n"
+        "Acompanhe o andamento pelo dashboard do FeedRH."
+    )
+
+    enviar_email_notificacao(solicitante.email, assunto, corpo)
 
 # Seed: Delete DB on startup to recreate with senha_hash column
 @app.on_event("startup")
@@ -432,6 +529,8 @@ def create_vaga(vaga: VagaCreate, db: Session = Depends(get_db), current_user: U
         cargo=vaga.cargo,
         empresa_destinada=empresa_destinada,
         senioridade=vaga.senioridade,
+        resumo_requisitos=vaga.resumo_requisitos.strip(),
+        requisitos_obrigatorios=vaga.requisitos_obrigatorios.strip(),
         tipo=vaga.tipo,
         profissional_substituido=vaga.profissional_substituido,
         justificativa_substituicao=vaga.justificativa_substituicao,
@@ -482,6 +581,7 @@ def update_etapa_funil(vaga_id: int, update: EtapaFunilUpdate, db: Session = Dep
         raise HTTPException(status_code=404, detail="Vaga não encontrada")
     if update.etapa < 1 or update.etapa > 9:
         raise HTTPException(status_code=400, detail="Etapa deve ser de 1 a 9")
+    etapa_anterior = db_vaga.etapa_funil or 1
     db_vaga.etapa_funil = update.etapa
     if update.etapa == 9:
         db_vaga.data_finalizacao = datetime.utcnow()
@@ -489,6 +589,8 @@ def update_etapa_funil(vaga_id: int, update: EtapaFunilUpdate, db: Session = Dep
         db_vaga.data_finalizacao = None
     db.commit()
     db.refresh(db_vaga)
+    if update.etapa > etapa_anterior:
+        notificar_avanco_etapa(db, db_vaga, etapa_anterior, update.etapa)
     preencher_posicoes_fila_rh(db, [db_vaga])
     return db_vaga
 
@@ -496,17 +598,12 @@ def update_etapa_funil(vaga_id: int, update: EtapaFunilUpdate, db: Session = Dep
 def get_relatorio(db: Session = Depends(get_db), current_user: UserModel = Depends(require_rh)):
     vagas = db.query(VagaModel).all()
     por_empresa, por_senioridade, por_etapa = {}, {}, {}
-    etapas_nomes = {
-        1: "Fila de Espera", 2: "Divulgação", 3: "Triagem",
-        4: "Entrevista Inicial", 5: "Testes Psicológicos", 6: "Parecer Psicológico",
-        7: "Entrevista com Gestor", 8: "Aguardando Retorno", 9: "Finalizada"
-    }
     finalizadas_no_mes = 0
     now = datetime.utcnow()
     for v in vagas:
         por_empresa[v.empresa_destinada] = por_empresa.get(v.empresa_destinada, 0) + 1
         por_senioridade[v.senioridade] = por_senioridade.get(v.senioridade, 0) + 1
-        nome_etapa = etapas_nomes.get(v.etapa_funil, "Desconhecida")
+        nome_etapa = ETAPAS_FUNIL.get(v.etapa_funil, "Desconhecida")
         por_etapa[nome_etapa] = por_etapa.get(nome_etapa, 0) + 1
         if v.etapa_funil == 9 and v.data_finalizacao:
             if v.data_finalizacao.year == now.year and v.data_finalizacao.month == now.month:

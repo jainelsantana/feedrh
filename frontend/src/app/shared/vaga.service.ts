@@ -9,6 +9,8 @@ export interface Vaga {
   data_abertura: string;
   empresa_destinada: string;
   senioridade: string;
+  resumo_requisitos?: string;
+  requisitos_obrigatorios?: string;
   tipo: string;
   profissional_substituido?: string;
   justificativa_substituicao?: string;
