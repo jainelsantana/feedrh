@@ -12,7 +12,7 @@ export interface Empresa {
   providedIn: 'root'
 })
 export class EmpresaService {
-  private apiUrl = 'http://localhost:3007/empresas';
+  private apiUrl = '/api/empresas';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 
