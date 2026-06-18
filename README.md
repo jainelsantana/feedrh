@@ -1,218 +1,260 @@
-# FeedRH - Sistema de Gestão de Recursos Humanos
+# FeedRH
 
-## 📋 Visão Geral
+Sistema web para gestão de requisições de vagas, decisão do RH/diretoria, acompanhamento de funil seletivo, relatórios e notificações automáticas por e-mail para gestores.
 
-O **FeedRH** é um sistema web moderno e completo para gestão de recursos humanos, desenvolvido com arquitetura de microsserviços containerizada. O sistema permite o gerenciamento centralizado de vagas, usuários, processos de decisão e geração de relatórios.
+Status atual: em desenvolvimento, com execução local via Docker Compose.
 
-**Versão:** 1.0.0  
-**Status:** Em desenvolvimento
+## Funcionalidades
 
----
+### RH
+- Gerenciar usuários e empresas.
+- Visualizar todas as vagas cadastradas.
+- Aprovar, congelar, negar ou retornar vagas para decisão.
+- Avançar ou retroceder vagas no funil seletivo de 9 etapas.
+- Consultar relatórios por empresa, gestor, senioridade e etapa.
+- Acompanhar histórico de decisões.
 
-## 🎯 Funcionalidades Principais
+### Gestor
+- Criar requisições de vagas.
+- Visualizar somente as próprias vagas.
+- Acompanhar posição na fila do RH e etapa atual do processo.
+- Receber e-mail automático quando houver avanço ou mudança relevante na vaga.
 
-### Para Usuários RH:
-- ✅ Gestão de usuários (criação, edição, exclusão)
-- ✅ Gerenciamento de vagas (Nova posição / Substituição)
-- ✅ Painel de decisão da diretoria
-- ✅ Geração de relatórios detalhados
-- ✅ Controle de congelamento de vagas
-- ✅ Rastreamento de etapas do funil de seleção
-- ✅ Notificação automática por e-mail ao gestor em avanços da vaga
+### Notificações
+- Envio automático ao gestor responsável pela vaga.
+- Assunto no padrão `Avanço na vaga: Nome da vaga`.
+- Corpo em texto puro e HTML responsivo.
+- Template visual alinhado ao FeedRH, com cabeçalho roxo, card de resumo, barra de progresso, detalhes da vaga e botão para o dashboard.
+- Suporte a SMTP com STARTTLS (`587`) e SSL implícito (`465`).
+- Falhas de envio são registradas nos logs do backend.
 
-### Para Gestores:
-- ✅ Visualização do dashboard
-- ✅ Acesso a vagas disponíveis
-- ✅ Acompanhamento de processos seletivos
-
-### Geral:
-- ✅ Sistema de autenticação seguro
-- ✅ Controle de acesso baseado em papéis (RBAC)
-- ✅ Interface responsiva com Tailwind CSS
-- ✅ API RESTful escalável
-
----
-
-## 🏗️ Arquitetura
-
-```
-FeedRH/
-├── Frontend (Angular 17)
-│   ├── UI responsiva com Tailwind CSS
-│   ├── Autenticação e guards de rota
-│   └── Componentes modulares
-│
-├── Backend (FastAPI + SQLAlchemy)
-│   ├── API RESTful
-│   ├── Banco de dados PostgreSQL
-│   └── CORS habilitado para frontend
-│
-└── Docker Compose
-    └── Orquestração de containers
-```
-
-### Arquitetura em Camadas:
-
-```
-┌─────────────────────────────────────┐
-│      Frontend (Angular 17)          │
-│  - Componentes                      │
-│  - Serviços                         │
-│  - Guards de rota                   │
-└──────────────┬──────────────────────┘
-               │ HTTP/REST
-┌──────────────▼──────────────────────┐
-│    Backend (FastAPI)                │
-│  - Rotas/Endpoints                  │
-│  - Validação (Pydantic)             │
-│  - Middleware CORS                  │
-└──────────────┬──────────────────────┘
-               │ ORM
-┌──────────────▼──────────────────────┐
-│    Banco de Dados (PostgreSQL)      │
-│  - Tabelas (Users, Vagas, Empresas) │
-└─────────────────────────────────────┘
-```
-
----
-
-## 🛠️ Tecnologias Utilizadas
+## Stack
 
 ### Frontend
-- **Angular 17.3.0** - Framework web moderno
-- **TypeScript 5.4** - Tipagem estática
-- **Tailwind CSS 3.4** - Estilização utilitária
-- **RxJS 7.8** - Programação reativa
-- **Angular Forms** - Validação de formulários
+- Angular 17.3
+- TypeScript 5.4
+- Tailwind CSS 3.4
+- RxJS
+- Nginx no container de produção
 
 ### Backend
-- **FastAPI** - Framework web de alta performance
-- **SQLAlchemy** - ORM para banco de dados
-- **Pydantic** - Validação de dados
-- **Python 3.11** - Linguagem de programação
-- **PostgreSQL** - Banco de dados relacional
+- FastAPI
+- Pydantic
+- SQLAlchemy
+- PostgreSQL
+- python-dotenv
+- SMTP via biblioteca padrão `smtplib`
 
-### DevOps
-- **Docker** - Containerização
-- **Docker Compose** - Orquestração de containers
-- **Nginx** - Servidor web reverso (frontend)
+### Infra local
+- Docker
+- Docker Compose
+- PostgreSQL 16 Alpine
 
----
+## Arquitetura
 
-## 📁 Estrutura de Pastas
-
-```
-FeedRH/
-├── docker-compose.yml          # Orquestração de containers
+```text
+feedrh/
 ├── backend/
-│   ├── Dockerfile              # Imagem Docker backend
-│   ├── main.py                 # Aplicação principal FastAPI
-│   └── requirements.txt         # Dependências Python
-│
-└── frontend/
-    ├── Dockerfile              # Imagem Docker frontend
-    ├── nginx.conf              # Configuração Nginx
-    ├── angular.json            # Configuração Angular
-    ├── tailwind.config.js       # Configuração Tailwind
-    ├── tsconfig.json           # Configuração TypeScript
-    ├── package.json            # Dependências Node
-    └── src/
-        ├── index.html          # HTML principal
-        ├── main.ts             # Entry point Angular
-        ├── styles.css          # Estilos globais
-        └── app/
-            ├── app.component.ts       # Componente raiz
-            ├── app.config.ts          # Configuração da app
-            ├── app.routes.ts          # Rotas da aplicação
-            ├── core/                  # Serviços essenciais
-            │   ├── auth.guard.ts      # Guard de autenticação
-            │   └── auth.service.ts    # Serviço de auth
-            ├── features/              # Componentes por feature
-            │   ├── dashboard/         # Dashboard principal
-            │   ├── decision-panel/    # Painel de decisão
-            │   ├── job-form/          # Formulário de vagas
-            │   ├── login/             # Página de login
-            │   ├── report/            # Relatórios
-            │   └── user-management/   # Gerenciamento de usuários
-            └── shared/                # Serviços compartilhados
-                ├── empresa.service.ts
-                ├── user.service.ts
-                └── vaga.service.ts
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+├── frontend/
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── tailwind.config.js
+│   └── src/
+├── docker-compose.yml
+├── .env.example
+├── README.md
+├── REFERENCIA_RAPIDA.md
+├── DESENVOLVIMENTO.md
+└── DEPLOYMENT.md
 ```
 
----
+Fluxo principal:
 
-## 🚀 Guia de Instalação e Execução
+```text
+Angular/Nginx -> FastAPI -> SQLAlchemy -> PostgreSQL
+                         -> SMTP -> E-mail do gestor
+```
 
-### Pré-requisitos
-- Docker e Docker Compose instalados
-- Node.js 18+ (para desenvolvimento local)
-- Python 3.11+ (para desenvolvimento local)
+## Execução com Docker
 
-### Opção 1: Com Docker (Recomendado)
+Pré-requisitos:
+
+- Docker
+- Docker Compose
+
+Passos:
 
 ```bash
-# Clonar o repositório
-git clone <repo-url>
-cd FeedRH
-
-# Executar com Docker Compose
+cp .env.example .env
 docker-compose up --build
-
-A aplicação estará disponível em:
-- Frontend: http://localhost:4200
-- Backend: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-Acesse o frontend diretamente em: http://localhost:4200
 ```
 
-### Opção 2: Desenvolvimento Local
+URLs locais:
 
-#### Backend
-```bash
-# Navegar até o diretório backend
-cd backend
+| Serviço | URL |
+|---|---|
+| Frontend | http://localhost:4200 |
+| Backend | http://localhost:8000 |
+| Swagger | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
+| PostgreSQL | localhost:5432 |
 
-# Criar ambiente virtual
-python -m venv venv
+O `docker-compose.yml` injeta no backend:
 
-# Ativar ambiente virtual
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
-
-# Instalar dependências
-pip install -r requirements.txt
-
-# Executar servidor
-fastapi run main.py --port 8000
+```env
+DB_URL=postgresql+psycopg2://feedrh:feedrh@db:5432/feedrh
 ```
 
-#### Frontend
-```bash
-# Navegar até o diretório frontend
-cd frontend
+## Configuração do `.env`
 
-# Instalar dependências
-npm install
+O arquivo `.env` é local e está ignorado pelo Git. Nunca versionar credenciais reais.
 
-# Iniciar servidor de desenvolvimento
-npm start
+Modelo atual:
 
-# A aplicação estará em http://localhost:4200
+```env
+DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
+
+MAIL_HOST=
+MAIL_PORT=587
+MAIL_USER=
+MAIL_PASSWORD=
+MAIL_FROM=
+MAIL_FROM_NAME=Sistema de Recrutamento
+MAIL_USE_TLS=true
+MAIL_USE_SSL=false
+APP_URL=http://localhost:4200
 ```
 
----
+Exemplo para SMTP com SSL na porta 465:
 
-## 📊 Modelos de Dados
+```env
+MAIL_HOST=mail.seudominio.com.br
+MAIL_PORT=465
+MAIL_USER=naoresponda@seudominio.com.br
+MAIL_PASSWORD=sua-senha
+MAIL_FROM=naoresponda@seudominio.com.br
+MAIL_FROM_NAME=Sistema de Recrutamento
+MAIL_USE_TLS=false
+MAIL_USE_SSL=true
+APP_URL=http://localhost:4200
+```
 
-### Usuário (User)
+`APP_URL` é usado no botão "Ver no dashboard" do template de e-mail.
+
+## Dados iniciais
+
+Ao iniciar com banco vazio, o backend cria empresas e usuários padrão.
+
+Empresas padrão:
+
+- Elevare
+- Ora Empresas
+- Mercado do Provedor
+- Mercado do Construtor
+- Outra
+
+Usuários padrão:
+
+| Perfil | E-mail | Senha |
+|---|---|---|
+| RH | `rh@feedrh.com` | `rh@123` |
+| Gestor | `gestor@feedrh.com` | `gestor@123` |
+
+## Autenticação
+
+O login é feito em:
+
+```http
+POST /auth/login
+```
+
+O frontend armazena o usuário autenticado e envia o ID nas chamadas protegidas usando o header:
+
+```http
+X-User-Id: 1
+```
+
+Perfis:
+
+- `RH`: acesso administrativo, decisões, gestão de usuários, empresas, relatórios e alteração de etapas.
+- `GESTOR`: criação e acompanhamento das próprias vagas.
+
+## Rotas do frontend
+
+| Rota | Tela | Perfil |
+|---|---|---|
+| `/login` | Login | Público |
+| `/dashboard` | Dashboard de vagas | RH e Gestor |
+| `/vagas/nova` | Nova vaga | RH e Gestor |
+| `/rh/usuarios` | Gestão de usuários e empresas | RH |
+| `/rh/decisoes` | Painel de decisão | RH |
+| `/rh/relatorios` | Relatórios | RH |
+
+## Endpoints do backend
+
+As rotas atuais não usam prefixo `/api`.
+
+### Autenticação
+
+```http
+POST /auth/login
+```
+
+### Usuários
+
+```http
+POST   /users
+GET    /users
+PATCH  /users/{user_id}
+DELETE /users/{user_id}
+```
+
+As rotas de usuários exigem perfil `RH`, exceto login.
+
+### Empresas
+
+```http
+GET    /empresas
+POST   /empresas
+PATCH  /empresas/{empresa_id}
+DELETE /empresas/{empresa_id}
+```
+
+`GET /empresas` exige usuário autenticado. Criação, edição e remoção exigem `RH`.
+
+### Vagas
+
+```http
+POST  /vagas
+GET   /vagas
+PATCH /vagas/{vaga_id}/decisao-diretoria
+PATCH /vagas/{vaga_id}/etapa-funil
+GET   /vagas/relatorio
+```
+
+Filtros aceitos em `GET /vagas`:
+
+```text
+gestor_id
+data_inicio=YYYY-MM-DD
+data_fim=YYYY-MM-DD
+```
+
+`GET /vagas/relatorio` é restrito ao perfil `RH`.
+
+## Modelo de dados principal
+
+### Usuário
+
 ```python
 {
   "id": int,
   "nome": str,
-  "email": str (único),
+  "email": str,
   "empresa": str,
   "perfil": "RH" | "GESTOR",
   "senha_hash": str
@@ -220,14 +262,16 @@ npm start
 ```
 
 ### Empresa
+
 ```python
 {
   "id": int,
-  "nome": str (único)
+  "nome": str
 }
 ```
 
 ### Vaga
+
 ```python
 {
   "id": int,
@@ -235,235 +279,180 @@ npm start
   "data_abertura": datetime,
   "empresa_destinada": str,
   "senioridade": str,
+  "resumo_requisitos": str,
+  "requisitos_obrigatorios": str,
   "tipo": "Nova posição" | "Substituição",
-  "profissional_substituido": str (opcional),
-  "justificativa_substituicao": str (opcional),
+  "profissional_substituido": str | None,
+  "justificativa_substituicao": str | None,
   "solicitante_id": int,
-  "status_decisao_diretoria": "Pendente" | "Aprovada" | "Rejeitada",
+  "status_decisao_diretoria": "Pendente" | "Aprovada" | "Congelada" | "Negada",
+  "justificativa_negativa": str | None,
   "quantidade_congelamentos": int,
-  "etapa_funil": int (1-5),
-  "data_finalizacao": datetime (opcional)
+  "etapa_funil": int,
+  "data_finalizacao": datetime | None
 }
 ```
 
----
+### Histórico da vaga
 
-## 🔑 Rotas Principais da Aplicação
-
-| Rota | Componente | Requer Auth | Papel Necessário |
-|------|-----------|-------------|-----------------|
-| `/` | Login | ❌ | - |
-| `/login` | LoginComponent | ❌ | - |
-| `/dashboard` | DashboardComponent | ✅ | Qualquer |
-| `/vagas/nova` | JobFormComponent | ✅ | Qualquer |
-| `/rh/usuarios` | UserManagementComponent | ✅ | RH |
-| `/rh/decisoes` | DecisionPanelComponent | ✅ | RH |
-| `/rh/relatorios` | ReportComponent | ✅ | RH |
-
----
-
-## 🔐 Autenticação e Autorização
-
-### Guard de Autenticação
-- Todas as rotas protegidas utilizam `AuthGuard`
-- Valida se o usuário está autenticado
-- Redireciona para login se não autenticado
-
-### Controle de Acesso
-- **RH**: Acesso completo a todas as funcionalidades
-- **GESTOR**: Acesso limitado ao dashboard e visualização de vagas
-
-### Segurança de Senha
-- Senhas são criptografadas com SHA-256
-- Hash armazenado no banco de dados
-
----
-
-## 🔗 Endpoints da API
-
-### Autenticação
-```
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/auth/me
+```python
+{
+  "id": int,
+  "vaga_id": int,
+  "data_registro": datetime,
+  "usuario_id": int,
+  "usuario_nome": str,
+  "acao": str,
+  "status_anterior": str | None,
+  "status_novo": str | None,
+  "justificativa": str | None
+}
 ```
 
-### Usuários
-```
-GET    /api/users          # Listar todos
-GET    /api/users/{id}     # Obter um
-POST   /api/users          # Criar
-PUT    /api/users/{id}     # Atualizar
-DELETE /api/users/{id}     # Deletar
-```
+## Funil seletivo
 
-### Vagas
-```
-GET    /api/vagas          # Listar todas
-GET    /api/vagas/{id}     # Obter uma
-POST   /api/vagas          # Criar
-PUT    /api/vagas/{id}     # Atualizar
-DELETE /api/vagas/{id}     # Deletar
-```
+O campo `etapa_funil` usa valores de 1 a 9:
 
-### Empresas
-```
-GET    /api/empresas       # Listar todas
-GET    /api/empresas/{id}  # Obter uma
-POST   /api/empresas       # Criar
-```
+| Etapa | Nome |
+|---|---|
+| 1 | Fila de Espera |
+| 2 | Divulgação |
+| 3 | Triagem |
+| 4 | Entrevista Inicial |
+| 5 | Testes Psicológicos |
+| 6 | Parecer Psicológico |
+| 7 | Entrevista com Gestor |
+| 8 | Aguardando Retorno |
+| 9 | Finalizada |
 
----
+Quando a vaga chega na etapa 9, `data_finalizacao` é preenchida automaticamente. Se voltar para uma etapa anterior, a finalização é removida.
 
-## 📝 Variáveis de Ambiente
+## Regras importantes
+
+- Vagas começam com decisão `Pendente` e etapa `1`.
+- O RH pode mudar decisão para `Pendente`, `Aprovada`, `Congelada` ou `Negada`.
+- Uma vaga `Negada` exige justificativa.
+- Cada novo congelamento incrementa `quantidade_congelamentos`.
+- O sistema registra histórico de decisões em `vagas_historico`.
+- Mudanças de decisão e mudanças de etapa notificam o gestor por e-mail.
+- Para gestores, `GET /vagas` retorna somente vagas criadas pelo próprio usuário.
+
+## Desenvolvimento local
 
 ### Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+fastapi run main.py --port 8000
+```
+
+Se o backend rodar fora do Docker, configure `DB_URL` para apontar para o Postgres local ou para o Postgres publicado pelo Compose:
+
 ```env
 DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
-MAIL_HOST=smtp.seudominio.com
-MAIL_PORT=587
-MAIL_USER=usuario@seudominio.com
-MAIL_PASSWORD=sua-senha-ou-token
-MAIL_FROM=no-reply@seudominio.com
-MAIL_FROM_NAME=Sistema de Recrutamento
-MAIL_USE_TLS=true
-MAIL_USE_SSL=false
-APP_URL=http://localhost:4200
 ```
 
-Use o arquivo `.env.example` como modelo e preencha os dados reais no `.env`.
-O `.env` fica ignorado pelo Git para evitar expor credenciais de e-mail no código-fonte.
-
 ### Frontend
-```env
-API_BASE_URL=http://localhost:8000    # URL da API (configurada em serviços)
-```
 
----
-
-## 🧪 Testes
-
-### Frontend
 ```bash
 cd frontend
-npm test                    # Executar testes unitários
-npm run build              # Build para produção
-ng test --watch            # Testes em modo watch
+npm install
+npm start
 ```
 
----
+O serviço Angular chama o backend em:
 
-## 📈 Guia de Desenvolvimento
-
-### Adicionando uma Nova Feature
-
-1. **Criar componente**
-   ```bash
-   ng generate component features/nova-feature
-   ```
-
-2. **Adicionar rota em `app.routes.ts`**
-   ```typescript
-   {
-     path: 'nova-rota',
-     component: NovaFeatureComponent,
-     canActivate: [AuthGuard],
-     data: { role: 'RH' }
-   }
-   ```
-
-3. **Criar serviço se necessário**
-   ```bash
-   ng generate service shared/nova-feature.service
-   ```
-
-4. **Implementar lógica**
-   - Utilizar Reactive Forms
-   - Chamar serviços via injeção de dependência
-   - Seguir padrão de componentes standalone
-
-### Padrões de Código
-
-#### Componentes Angular
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-
-@Component({
-  selector: 'app-exemplo',
-  standalone: true,
-  imports: [CommonModule],
-  template: `<div>Conteúdo</div>`
-})
-export class ExemploComponent implements OnInit {
-  ngOnInit() {
-    // Inicializar componente
-  }
-}
+```text
+http://localhost:8000
 ```
 
-#### Serviços
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+## Testes e validações úteis
 
-@Injectable({
-  providedIn: 'root'
-})
-export class ExemploService {
-  constructor(private http: HttpClient) {}
+Build do frontend:
 
-  obter(): Observable<any> {
-    return this.http.get('/api/endpoint');
-  }
-}
+```bash
+cd frontend
+npm run build
 ```
 
----
+Checagem de sintaxe do backend:
 
-## 🐛 Solução de Problemas
+```bash
+PYTHONPYCACHEPREFIX=/private/tmp/feedrh_pycache python3 -m py_compile backend/main.py
+```
+
+Ver logs:
+
+```bash
+docker-compose logs backend
+docker-compose logs frontend
+docker-compose logs db
+```
+
+Entrar no banco:
+
+```bash
+docker-compose exec db psql -U feedrh -d feedrh
+```
+
+## Limpeza do banco local
+
+Para apagar os dados das tabelas principais e resetar IDs:
+
+```bash
+docker-compose up -d db
+docker-compose exec db psql -U feedrh -d feedrh -c "TRUNCATE TABLE vagas_historico, vagas, users, empresas RESTART IDENTITY CASCADE;"
+docker-compose up -d backend
+```
+
+Ao subir o backend novamente, os dados padrão são recriados.
+
+Para apagar também o volume do PostgreSQL:
+
+```bash
+docker-compose down -v
+```
+
+## Solução de problemas
 
 ### Frontend não conecta no backend
-- Verificar se backend está rodando em `http://localhost:8000`
-- Verificar CORS configurado no backend
-- Verificar URL da API nos serviços
 
-### Erro de banco de dados
-- Verificar se o container `db` está saudável
-- Para resetar o PostgreSQL local, parar os containers e remover volumes com `docker-compose down -v`
-- Reiniciar containers Docker
+- Verifique se o backend está em `http://localhost:8000`.
+- Confira o console do navegador.
+- Veja `docker-compose logs backend`.
 
-### Problemas de permissão CORS
-- Verificar middleware CORS no backend
-- Origem frontend deve estar registrada
+### E-mail não é enviado
 
----
+- Confira `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM`.
+- Para porta `465`, use `MAIL_USE_SSL=true` e `MAIL_USE_TLS=false`.
+- Para porta `587`, use `MAIL_USE_SSL=false` e `MAIL_USE_TLS=true`.
+- Verifique se o provedor SMTP permite envio pelo usuário configurado.
+- Veja os erros completos em `docker-compose logs backend`.
 
-## 📚 Documentação Adicional
+### Banco não inicia
 
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [Angular Docs](https://angular.io/docs)
-- [Tailwind CSS Docs](https://tailwindcss.com/docs)
-- [SQLAlchemy Docs](https://docs.sqlalchemy.org/)
+- Veja o status com `docker-compose ps`.
+- Confira `docker-compose logs db`.
+- Se for um ambiente local descartável, recrie o volume com `docker-compose down -v`.
 
----
+## Segurança
 
-## 📞 Suporte
+- `.env` contém credenciais e não deve ser versionado.
+- `.env.example` deve conter apenas chaves e valores de exemplo.
+- As senhas de usuários são armazenadas como hash SHA-256. Para produção, recomenda-se migrar para um algoritmo próprio para senhas, como bcrypt ou Argon2.
+- O controle de sessão atual é simples e baseado em `X-User-Id`, adequado para o estágio atual do projeto, mas deve evoluir para tokens assinados antes de produção.
 
-Para dúvidas ou problemas:
-1. Verificar a documentação acima
-2. Consultar logs dos containers: `docker-compose logs`
-3. Verificar console do navegador (DevTools)
-4. Revisar o PostgreSQL com uma ferramenta como DBeaver ou psql
+## Documentação adicional
 
----
+- `REFERENCIA_RAPIDA.md`: comandos e mapa rápido do projeto.
+- `DESENVOLVIMENTO.md`: notas de desenvolvimento.
+- `DEPLOYMENT.md`: orientação de deploy.
 
-## 📄 Licença
+## Licença
 
-Este projeto é propriedade privada.
+Projeto privado.
 
----
-
-**Última atualização:** Junho 2026
-# feedrh
+Última atualização: Junho de 2026.
