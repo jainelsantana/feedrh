@@ -3,13 +3,21 @@ from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional
 from datetime import datetime
 from email.message import EmailMessage
+from email.utils import formataddr
+from html import escape
+from pathlib import Path
 from sqlalchemy import create_engine, inspect, Column, Integer, String, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 import hashlib
 import logging
 import os
 import smtplib
+
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR.parent / ".env")
+load_dotenv(BASE_DIR / ".env", override=False)
 
 # Database Setup
 DEFAULT_DATABASE_URL = "postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh"
@@ -374,66 +382,237 @@ def criar_empresa_se_nao_existir(db: Session, nome: str):
     db.refresh(empresa)
     return empresa
 
-def enviar_email_notificacao(destinatario: str, assunto: str, corpo: str) -> bool:
-    smtp_host = os.getenv("SMTP_HOST")
+def enviar_email_notificacao(destinatario: str, assunto: str, corpo: str, corpo_html: Optional[str] = None) -> bool:
+    mail_host = os.getenv("MAIL_HOST")
     try:
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        mail_port = int(os.getenv("MAIL_PORT", "587"))
     except ValueError:
-        logger.warning("SMTP_PORT inválida. Usando porta 587.")
-        smtp_port = 587
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", smtp_user or "nao-responda@feedrh.local")
-    smtp_use_tls = os.getenv("SMTP_USE_TLS", "true").lower() not in ["0", "false", "no"]
+        logger.warning("MAIL_PORT inválida. Usando porta 587.")
+        mail_port = 587
+    mail_user = os.getenv("MAIL_USER")
+    mail_password = os.getenv("MAIL_PASSWORD")
+    mail_from = os.getenv("MAIL_FROM") or mail_user
+    mail_from_name = os.getenv("MAIL_FROM_NAME", "Sistema de Recrutamento")
+    mail_use_ssl = os.getenv("MAIL_USE_SSL", "true" if mail_port == 465 else "false").lower() not in ["0", "false", "no", "nao"]
+    mail_use_tls = (
+        os.getenv("MAIL_USE_TLS", "false" if mail_use_ssl else "true").lower()
+        not in ["0", "false", "no", "nao"]
+    )
 
-    if not smtp_host:
-        logger.info(
-            "E-mail de notificação simulado para %s | Assunto: %s | Corpo: %s",
+    if not mail_host or not mail_from:
+        logger.error(
+            "Envio de e-mail não configurado. Verifique MAIL_HOST e MAIL_FROM no .env. "
+            "Destinatário: %s | Assunto: %s",
             destinatario,
             assunto,
-            corpo,
         )
         return False
 
     mensagem = EmailMessage()
-    mensagem["From"] = smtp_from
+    mensagem["From"] = formataddr((mail_from_name, mail_from)) if mail_from_name else mail_from
     mensagem["To"] = destinatario
     mensagem["Subject"] = assunto
     mensagem.set_content(corpo)
+    if corpo_html:
+        mensagem.add_alternative(corpo_html, subtype="html")
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            if smtp_use_tls:
+        smtp_client = smtplib.SMTP_SSL if mail_use_ssl else smtplib.SMTP
+        with smtp_client(mail_host, mail_port, timeout=10) as server:
+            if mail_use_tls and not mail_use_ssl:
                 server.starttls()
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
+            if mail_user and mail_password:
+                server.login(mail_user, mail_password)
             server.send_message(mensagem)
         logger.info("E-mail de notificação enviado para %s", destinatario)
         return True
     except Exception:
-        logger.warning("Não foi possível enviar e-mail de notificação para %s", destinatario, exc_info=True)
+        logger.error("Não foi possível enviar e-mail de notificação para %s", destinatario, exc_info=True)
         return False
 
-def notificar_avanco_etapa(db: Session, vaga: VagaModel, etapa_anterior: int, nova_etapa: int) -> None:
-    solicitante = db.query(UserModel).filter(UserModel.id == vaga.solicitante_id).first()
-    if not solicitante:
-        logger.info("Notificação ignorada: solicitante da vaga %s não encontrado.", vaga.id)
+def montar_email_avanco_html(vaga: VagaModel, gestor: UserModel, resumo: str) -> str:
+    etapa_nome = ETAPAS_FUNIL.get(vaga.etapa_funil, f"Etapa {vaga.etapa_funil}")
+    progresso = max(0, min(100, round(((vaga.etapa_funil or 1) / 9) * 100)))
+    app_url = (os.getenv("APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:4200").rstrip("/")
+    dashboard_url = f"{app_url}/dashboard"
+
+    cargo = escape(vaga.cargo or "Vaga")
+    gestor_nome = escape(gestor.nome or "")
+    resumo_html = escape(resumo).replace("\n", "<br>")
+    empresa = escape(vaga.empresa_destinada or "Não informado")
+    senioridade = escape(vaga.senioridade or "Não informado")
+    status = escape(vaga.status_decisao_diretoria or "Não informado")
+    etapa = escape(etapa_nome)
+    tipo = escape(vaga.tipo or "Não informado")
+    data_abertura = vaga.data_abertura.strftime("%d/%m/%Y") if vaga.data_abertura else "Não informado"
+
+    return f"""<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      @media only screen and (max-width: 640px) {{
+        .container {{ width: 100% !important; }}
+        .content {{ padding: 24px 18px !important; }}
+        .hero {{ padding: 28px 22px !important; }}
+        .title {{ font-size: 26px !important; line-height: 32px !important; }}
+        .detail-cell {{ display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 12px !important; }}
+        .button {{ display: block !important; }}
+      }}
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background:#F3E5F5; font-family:Inter, Arial, Helvetica, sans-serif; color:#1F2937;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Houve um novo avanço na vaga {cargo}.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3E5F5; padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0" style="width:640px; max-width:640px; background:#FFFFFF; border-radius:20px; overflow:hidden; box-shadow:0 18px 45px rgba(49,27,146,0.14); border:1px solid #E9D5FF;">
+            <tr>
+              <td class="hero" style="padding:34px 34px 30px; background:#6200EE;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:13px; line-height:18px; color:#EDE7FF; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">
+                      FeedRH
+                    </td>
+                    <td align="right">
+                      <span style="display:inline-block; background:#B388FF; color:#311B92; border-radius:999px; padding:8px 12px; font-size:12px; font-weight:800;">
+                        Novo avanço
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+                <h1 class="title" style="margin:22px 0 10px; color:#FFFFFF; font-size:32px; line-height:38px; font-weight:800; letter-spacing:0;">
+                  Avanço na vaga:<br>{cargo}
+                </h1>
+                <p style="margin:0; color:#EDE7FF; font-size:15px; line-height:24px;">
+                  Olá{", " + gestor_nome if gestor_nome else ""}. A vaga teve uma atualização no processo seletivo.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td class="content" style="padding:30px 34px 34px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+                  <tr>
+                    <td style="background:#FAF7FF; border:1px solid #E9D5FF; border-radius:16px; padding:20px;">
+                      <p style="margin:0 0 8px; color:#6200EE; font-size:12px; line-height:16px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase;">
+                        Resumo do ocorrido
+                      </p>
+                      <p style="margin:0; color:#1F2937; font-size:16px; line-height:25px; font-weight:600;">
+                        {resumo_html}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+                  <tr>
+                    <td style="padding-bottom:10px;">
+                      <p style="margin:0; color:#311B92; font-size:15px; line-height:20px; font-weight:800;">Etapa atual</p>
+                    </td>
+                    <td align="right" style="padding-bottom:10px;">
+                      <p style="margin:0; color:#6200EE; font-size:14px; line-height:20px; font-weight:800;">{vaga.etapa_funil or 1} / 9</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="background:#E5E7EB; border-radius:999px; height:12px; overflow:hidden;">
+                      <div style="background:#6200EE; width:{progresso}%; height:12px; border-radius:999px;"></div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding-top:8px;">
+                      <p style="margin:0; color:#6B7280; font-size:13px; line-height:18px;">{progresso}% - {etapa}</p>
+                    </td>
+                  </tr>
+                </table>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                  <tr>
+                    <td class="detail-cell" width="50%" style="width:50%; padding-right:8px; padding-bottom:12px;">
+                      <div style="border:1px solid #EEF2F7; border-radius:14px; padding:14px; background:#FFFFFF;">
+                        <p style="margin:0 0 4px; color:#9CA3AF; font-size:11px; line-height:15px; font-weight:800; text-transform:uppercase;">Empresa</p>
+                        <p style="margin:0; color:#111827; font-size:14px; line-height:20px; font-weight:700;">{empresa}</p>
+                      </div>
+                    </td>
+                    <td class="detail-cell" width="50%" style="width:50%; padding-left:8px; padding-bottom:12px;">
+                      <div style="border:1px solid #EEF2F7; border-radius:14px; padding:14px; background:#FFFFFF;">
+                        <p style="margin:0 0 4px; color:#9CA3AF; font-size:11px; line-height:15px; font-weight:800; text-transform:uppercase;">Senioridade</p>
+                        <p style="margin:0; color:#111827; font-size:14px; line-height:20px; font-weight:700;">{senioridade}</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="detail-cell" width="50%" style="width:50%; padding-right:8px;">
+                      <div style="border:1px solid #EEF2F7; border-radius:14px; padding:14px; background:#FFFFFF;">
+                        <p style="margin:0 0 4px; color:#9CA3AF; font-size:11px; line-height:15px; font-weight:800; text-transform:uppercase;">Status</p>
+                        <p style="margin:0; color:#111827; font-size:14px; line-height:20px; font-weight:700;">{status}</p>
+                      </div>
+                    </td>
+                    <td class="detail-cell" width="50%" style="width:50%; padding-left:8px;">
+                      <div style="border:1px solid #EEF2F7; border-radius:14px; padding:14px; background:#FFFFFF;">
+                        <p style="margin:0 0 4px; color:#9CA3AF; font-size:11px; line-height:15px; font-weight:800; text-transform:uppercase;">Abertura</p>
+                        <p style="margin:0; color:#111827; font-size:14px; line-height:20px; font-weight:700;">{data_abertura}</p>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding-top:2px;">
+                      <a class="button" href="{escape(dashboard_url, quote=True)}" style="display:inline-block; background:#6200EE; color:#FFFFFF; text-decoration:none; border-radius:12px; padding:14px 22px; font-size:14px; line-height:18px; font-weight:800;">
+                        Ver no dashboard
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:24px 0 0; color:#6B7280; font-size:12px; line-height:19px; text-align:center;">
+                  Tipo da vaga: {tipo}<br>
+                  Atenciosamente, Sistema de Recrutamento
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>"""
+
+def notificar_avanco_vaga(db: Session, vaga: VagaModel, resumo: str) -> None:
+    gestor = db.query(UserModel).filter(UserModel.id == vaga.solicitante_id).first()
+    if not gestor:
+        logger.warning("Notificação ignorada: gestor responsável pela vaga %s não encontrado.", vaga.id)
+        return
+    if not gestor.email:
+        logger.warning("Notificação ignorada: gestor responsável pela vaga %s não possui e-mail.", vaga.id)
         return
 
+    assunto = f"Avanço na vaga: {vaga.cargo}"
+    corpo = (
+        f"Olá{', ' + gestor.nome if gestor.nome else ''},\n\n"
+        f"Houve um novo avanço na vaga \"{vaga.cargo}\".\n\n"
+        "Resumo do ocorrido:\n"
+        f"{resumo}\n\n"
+        "Atenciosamente,\n"
+        "Sistema de Recrutamento"
+    )
+    corpo_html = montar_email_avanco_html(vaga, gestor, resumo)
+
+    enviar_email_notificacao(gestor.email, assunto, corpo, corpo_html)
+
+def notificar_avanco_etapa(db: Session, vaga: VagaModel, etapa_anterior: int, nova_etapa: int) -> None:
     etapa_origem = ETAPAS_FUNIL.get(etapa_anterior, f"Etapa {etapa_anterior}")
     etapa_destino = ETAPAS_FUNIL.get(nova_etapa, f"Etapa {nova_etapa}")
-    assunto = f"FeedRH: {vaga.cargo} avançou para {etapa_destino}"
-    corpo = (
-        f"Olá, {solicitante.nome}.\n\n"
-        f"A solicitação da vaga \"{vaga.cargo}\" avançou de \"{etapa_origem}\" para \"{etapa_destino}\".\n\n"
-        f"Empresa: {vaga.empresa_destinada}\n"
-        f"Senioridade: {vaga.senioridade}\n\n"
-        f"Resumo dos requisitos:\n{vaga.resumo_requisitos or 'Não informado'}\n\n"
-        f"Requisitos obrigatórios:\n{vaga.requisitos_obrigatorios or 'Não informado'}\n\n"
-        "Acompanhe o andamento pelo dashboard do FeedRH."
-    )
+    resumo = f'A etapa da vaga foi alterada de "{etapa_origem}" para "{etapa_destino}".'
+    notificar_avanco_vaga(db, vaga, resumo)
 
-    enviar_email_notificacao(solicitante.email, assunto, corpo)
+def notificar_avanco_decisao(db: Session, vaga: VagaModel, status_anterior: str, novo_status: str, justificativa: Optional[str] = None) -> None:
+    resumo = f'A decisão da vaga foi alterada de "{status_anterior}" para "{novo_status}".'
+    if justificativa:
+        resumo = f"{resumo}\nJustificativa: {justificativa}"
+    notificar_avanco_vaga(db, vaga, resumo)
 
 # Seed default data on an empty database
 @app.on_event("startup")
@@ -670,7 +849,8 @@ def update_decisao_diretoria(vaga_id: int, update: DecisaoDiretoriaUpdate, db: S
         db_vaga.justificativa_negativa = justificativa_negativa
     if update.status == "Congelada" and status_anterior != "Congelada":
         db_vaga.quantidade_congelamentos = (db_vaga.quantidade_congelamentos or 0) + 1
-    if status_anterior != update.status or update.status == "Negada":
+    houve_avanco = status_anterior != update.status or update.status == "Negada"
+    if houve_avanco:
         db.add(VagaHistoricoModel(
             vaga_id=db_vaga.id,
             usuario_id=current_user.id,
@@ -682,6 +862,8 @@ def update_decisao_diretoria(vaga_id: int, update: DecisaoDiretoriaUpdate, db: S
         ))
     db.commit()
     db.refresh(db_vaga)
+    if houve_avanco:
+        notificar_avanco_decisao(db, db_vaga, status_anterior, update.status, justificativa_negativa or None)
     return preencher_dados_vagas(db, [db_vaga])[0]
 
 @app.patch("/vagas/{vaga_id}/etapa-funil", response_model=VagaResponse)
@@ -699,7 +881,7 @@ def update_etapa_funil(vaga_id: int, update: EtapaFunilUpdate, db: Session = Dep
         db_vaga.data_finalizacao = None
     db.commit()
     db.refresh(db_vaga)
-    if update.etapa > etapa_anterior:
+    if update.etapa != etapa_anterior:
         notificar_avanco_etapa(db, db_vaga, etapa_anterior, update.etapa)
     return preencher_dados_vagas(db, [db_vaga])[0]
 

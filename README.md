@@ -18,6 +18,7 @@ O **FeedRH** é um sistema web moderno e completo para gestão de recursos human
 - ✅ Geração de relatórios detalhados
 - ✅ Controle de congelamento de vagas
 - ✅ Rastreamento de etapas do funil de seleção
+- ✅ Notificação automática por e-mail ao gestor em avanços da vaga
 
 ### Para Gestores:
 - ✅ Visualização do dashboard
@@ -319,7 +320,19 @@ POST   /api/empresas       # Criar
 ### Backend
 ```env
 DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
+MAIL_HOST=smtp.seudominio.com
+MAIL_PORT=587
+MAIL_USER=usuario@seudominio.com
+MAIL_PASSWORD=sua-senha-ou-token
+MAIL_FROM=no-reply@seudominio.com
+MAIL_FROM_NAME=Sistema de Recrutamento
+MAIL_USE_TLS=true
+MAIL_USE_SSL=false
+APP_URL=http://localhost:4200
 ```
+
+Use o arquivo `.env.example` como modelo e preencha os dados reais no `.env`.
+O `.env` fica ignorado pelo Git para evitar expor credenciais de e-mail no código-fonte.
 
 ### Frontend
 ```env

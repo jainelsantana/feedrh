@@ -42,6 +42,8 @@ ruff check .                       # Verificar lint
 | `backend/requirements.txt` | Dependências Python | Instalar novo pacote |
 | `frontend/src/app/app.routes.ts` | Rotas da aplicação | Adicionar nova rota |
 | `backend/main.py` | API e modelo de dados | Adicionar endpoint/modelo |
+| `.env` | Variáveis locais e credenciais de e-mail | Configurar SMTP/MAIL sem versionar segredos |
+| `.env.example` | Modelo das variáveis de ambiente | Documentar nova variável obrigatória |
 | `frontend/tailwind.config.js` | Tema e estilos | Customizar cores |
 | `.gitignore` | Arquivos ignorados | Excluir arquivo do Git |
 
@@ -65,6 +67,25 @@ Email: admin@feedrh.com
 Senha: admin123
 Perfil: RH
 ```
+
+## ✉️ Configuração de E-mail
+
+Copie `.env.example` para `.env` e preencha:
+
+```env
+MAIL_HOST=
+MAIL_PORT=587
+MAIL_USER=
+MAIL_PASSWORD=
+MAIL_FROM=
+MAIL_FROM_NAME=Sistema de Recrutamento
+MAIL_USE_TLS=true
+MAIL_USE_SSL=false
+APP_URL=http://localhost:4200
+```
+
+O backend usa essas variáveis para notificar automaticamente o gestor quando houver avanço na vaga.
+Falhas de envio são registradas nos logs do backend.
 
 ---
 
