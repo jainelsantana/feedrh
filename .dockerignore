@@ -1,0 +1,10 @@
+.git
+.env
+**/node_modules
+**/dist
+**/.angular
+__pycache__
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
