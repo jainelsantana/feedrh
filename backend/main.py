@@ -256,6 +256,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "FeedRh API"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 # Dependency
 def get_db():
     db = SessionLocal()
