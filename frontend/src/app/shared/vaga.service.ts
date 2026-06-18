@@ -75,7 +75,7 @@ export interface Relatorio {
   providedIn: 'root'
 })
 export class VagaService {
-  private apiUrl = 'http://localhost:8000/vagas';
+  private apiUrl = 'http://localhost:3007/vagas';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 
