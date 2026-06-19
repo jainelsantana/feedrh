@@ -9,7 +9,7 @@ import { AuthService } from '../../core/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-rh-dark via-rh-purple to-rh-neon px-4">
+    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-rh-dark via-rh-purple to-rh-neon px-4 pt-8 pb-16">
       
       <!-- Card de Login -->
       <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">

@@ -9,7 +9,7 @@ import { filter } from 'rxjs';
   standalone: true,
   imports: [RouterOutlet, RouterModule, CommonModule],
   template: `
-    <div class="min-h-screen flex flex-col" [ngClass]="{'bg-rh-gray-purple': !isLoginPage, 'bg-transparent': isLoginPage}">
+    <div class="min-h-screen flex flex-col" [ngClass]="{'bg-rh-gray-purple': !isLoginPage, 'bg-gradient-to-br from-rh-dark via-rh-purple to-rh-neon': isLoginPage}">
       <!-- Navbar (oculta na página de login) -->
       <nav *ngIf="!isLoginPage" class="bg-rh-purple text-white shadow-lg sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4">
@@ -73,6 +73,14 @@ import { filter } from 'rxjs';
       <main class="flex-grow">
         <router-outlet></router-outlet>
       </main>
+
+      <footer
+        class="px-4 py-3 text-center text-[11px] tracking-wide"
+        [ngClass]="isLoginPage ? 'fixed inset-x-0 bottom-0 z-40 bg-rh-dark/25 text-white/80 backdrop-blur-sm' : 'border-t border-purple-100 bg-white/70 text-gray-500'">
+        <span class="font-semibold">Desenvolvido por Jainel Santana</span>
+        <span class="mx-1 opacity-60">|</span>
+        <span>SISTEMAS-TI</span>
+      </footer>
     </div>
   `
 })
