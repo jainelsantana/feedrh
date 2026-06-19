@@ -71,13 +71,6 @@ import { AuthService } from '../../core/auth.service';
               {{ carregando ? 'Entrando...' : 'Entrar' }}
             </button>
           </form>
-
-          <!-- Credenciais de demo -->
-          <div class="mt-6 p-4 bg-purple-50 rounded-xl border border-purple-100 text-xs text-gray-600 space-y-1">
-            <p class="font-bold text-rh-dark flex items-center gap-1"><span class="material-icons text-xs">info</span>Credenciais de demonstração:</p>
-            <p><span class="font-semibold">RH:</span> rh&#64;feedrh.com / rh&#64;123</p>
-            <p><span class="font-semibold">Gestor:</span> gestor&#64;feedrh.com / gestor&#64;123</p>
-          </div>
         </div>
       </div>
     </div>
