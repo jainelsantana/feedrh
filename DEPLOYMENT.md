@@ -9,7 +9,7 @@
 docker-compose build
 
 # Build de uma imagem específica
-docker build -t feedrh-frontend:latest ./frontend
+docker build --build-arg API_URL=http://localhost:3007 -t feedrh-frontend:latest ./frontend
 docker build -t feedrh-backend:latest ./backend
 
 # Executar containers

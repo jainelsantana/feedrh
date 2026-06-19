@@ -127,6 +127,7 @@ MAIL_FROM_NAME=Sistema de Recrutamento
 MAIL_USE_TLS=true
 MAIL_USE_SSL=false
 APP_URL=http://localhost:4200
+API_URL=http://localhost:3007
 ```
 
 Exemplo para SMTP com SSL na porta 465:
@@ -141,9 +142,11 @@ MAIL_FROM_NAME=Sistema de Recrutamento
 MAIL_USE_TLS=false
 MAIL_USE_SSL=true
 APP_URL=http://localhost:4200
+API_URL=https://api.seudominio.com.br
 ```
 
 `APP_URL` é usado no botão "Ver no dashboard" do template de e-mail.
+`API_URL` é usada no build do frontend para apontar para o backend.
 
 ## Dados iniciais
 
