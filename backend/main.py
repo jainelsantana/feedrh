@@ -41,8 +41,8 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("feedrh")
+logger.setLevel(logging.INFO)
 
 ETAPAS_FUNIL = {
     1: "Fila de Espera",
