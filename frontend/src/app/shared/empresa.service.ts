@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from '../core/auth.service';
+import { environment } from '../../environments/environment';
 
 export interface Empresa {
   id: number;
@@ -12,7 +13,7 @@ export interface Empresa {
   providedIn: 'root'
 })
 export class EmpresaService {
-  private apiUrl = '/api/empresas';
+  private apiUrl = `${environment.apiUrl}/empresas`;
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 

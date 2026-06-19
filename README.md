@@ -98,9 +98,9 @@ URLs locais:
 | Serviço | URL |
 |---|---|
 | Frontend | http://localhost:4200 |
-| Backend | http://localhost:8000 |
-| Swagger | http://localhost:8000/docs |
-| ReDoc | http://localhost:8000/redoc |
+| Backend | http://localhost:3007 |
+| Swagger | http://localhost:3007/docs |
+| ReDoc | http://localhost:3007/redoc |
 | PostgreSQL | localhost:5432 |
 
 O `docker-compose.yml` injeta no backend:
@@ -346,7 +346,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-fastapi run main.py --port 8000
+uvicorn main:app --host 0.0.0.0 --port 3007
 ```
 
 Se o backend rodar fora do Docker, configure `DB_URL` para apontar para o Postgres local ou para o Postgres publicado pelo Compose:
@@ -366,7 +366,7 @@ npm start
 O serviço Angular chama o backend em:
 
 ```text
-http://localhost:8000
+http://localhost:3007
 ```
 
 ## Testes e validações úteis
@@ -420,7 +420,7 @@ docker-compose down -v
 
 ### Frontend não conecta no backend
 
-- Verifique se o backend está em `http://localhost:8000`.
+- Verifique se o backend está em `http://localhost:3007`.
 - Confira o console do navegador.
 - Veja `docker-compose logs backend`.
 

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from '../core/auth.service';
+import { environment } from '../../environments/environment';
 
 export interface Vaga {
   id: number;
@@ -75,7 +76,7 @@ export interface Relatorio {
   providedIn: 'root'
 })
 export class VagaService {
-  private apiUrl = '/api/vagas';
+  private apiUrl = `${environment.apiUrl}/vagas`;
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 

@@ -1,4 +1,4 @@
-fastapi[standard]
+fastapi
 pydantic
 python-dotenv
 sqlalchemy
