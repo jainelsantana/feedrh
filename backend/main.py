@@ -6,6 +6,7 @@ from email.message import EmailMessage
 from email.utils import formataddr
 from html import escape
 from pathlib import Path
+from urllib.parse import quote_plus
 from sqlalchemy import create_engine, inspect, Column, Integer, String, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ import hashlib
 import logging
 import os
 import smtplib
+import time
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR.parent / ".env")
@@ -21,18 +23,49 @@ load_dotenv(BASE_DIR / ".env", override=False)
 
 # Database Setup
 DEFAULT_DATABASE_URL = "postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh"
-SQLALCHEMY_DATABASE_URL = (
-    os.getenv("DB_URL")
-    or os.getenv("DATABASE_URL")
-    or DEFAULT_DATABASE_URL
-)
 
-if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
-        "postgres://",
-        "postgresql://",
-        1,
+def normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgres://"):
+        return database_url.replace(
+            "postgres://",
+            "postgresql://",
+            1,
+        )
+    return database_url
+
+def get_env_value(*names: str) -> Optional[str]:
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
+
+def build_database_url_from_parts() -> Optional[str]:
+    host = get_env_value("POSTGRES_HOST", "POSTGRESQL_HOST", "DB_HOST")
+    database = get_env_value("POSTGRES_DB", "POSTGRES_DATABASE", "POSTGRESQL_DATABASE", "DB_NAME")
+    user = get_env_value("POSTGRES_USER", "POSTGRES_USERNAME", "POSTGRESQL_USER", "DB_USER")
+    password = get_env_value("POSTGRES_PASSWORD", "POSTGRESQL_PASSWORD", "DB_PASSWORD")
+    port = get_env_value("POSTGRES_PORT", "POSTGRESQL_PORT", "DB_PORT") or "5432"
+
+    if not all([host, database, user, password]):
+        return None
+
+    return (
+        f"postgresql+psycopg2://{quote_plus(user)}:{quote_plus(password)}"
+        f"@{host}:{port}/{quote_plus(database)}"
     )
+
+def get_database_url() -> str:
+    database_url = (
+        os.getenv("DATABASE_URL")
+        or os.getenv("SQLALCHEMY_DATABASE_URL")
+        or build_database_url_from_parts()
+        or os.getenv("DB_URL")
+        or DEFAULT_DATABASE_URL
+    )
+    return normalize_database_url(database_url)
+
+SQLALCHEMY_DATABASE_URL = get_database_url()
 
 connect_args = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
@@ -105,8 +138,6 @@ class VagaHistoricoModel(Base):
     status_novo = Column(String, nullable=True)
     justificativa = Column(String, nullable=True)
 
-Base.metadata.create_all(bind=engine)
-
 def garantir_colunas_vagas():
     colunas = {coluna["name"] for coluna in inspect(engine).get_columns("vagas")}
 
@@ -127,7 +158,40 @@ def garantir_colunas_vagas():
         connection.exec_driver_sql("UPDATE vagas SET resumo_requisitos = '' WHERE resumo_requisitos IS NULL")
         connection.exec_driver_sql("UPDATE vagas SET requisitos_obrigatorios = '' WHERE requisitos_obrigatorios IS NULL")
 
-garantir_colunas_vagas()
+def get_database_retry_config() -> tuple[int, float]:
+    try:
+        attempts = int(os.getenv("DB_CONNECT_RETRIES", "10"))
+    except ValueError:
+        attempts = 10
+
+    try:
+        delay = float(os.getenv("DB_CONNECT_RETRY_SECONDS", "2"))
+    except ValueError:
+        delay = 2.0
+
+    return max(attempts, 1), max(delay, 0.0)
+
+def initialize_database() -> None:
+    attempts, delay = get_database_retry_config()
+
+    for attempt in range(1, attempts + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            garantir_colunas_vagas()
+            return
+        except Exception:
+            if attempt == attempts:
+                logger.exception("Nao foi possivel conectar ao banco de dados apos %s tentativa(s).", attempts)
+                raise
+
+            logger.warning(
+                "Banco de dados indisponivel na tentativa %s/%s. Nova tentativa em %.1fs.",
+                attempt,
+                attempts,
+                delay,
+                exc_info=True,
+            )
+            time.sleep(delay)
 
 # Pydantic Schemas
 class LoginRequest(BaseModel):
@@ -629,31 +693,34 @@ def notificar_avanco_decisao(db: Session, vaga: VagaModel, status_anterior: str,
 # Seed default data on an empty database
 @app.on_event("startup")
 def startup_event():
+    initialize_database()
     db = SessionLocal()
-    if not db.query(EmpresaModel).first():
-        empresas_padrao = ["Elevare", "Ora Empresas", "Mercado do Provedor", "Mercado do Construtor", "Outra"]
-        for empresa in empresas_padrao:
-            criar_empresa_se_nao_existir(db, empresa)
+    try:
+        if not db.query(EmpresaModel).first():
+            empresas_padrao = ["Elevare", "Ora Empresas", "Mercado do Provedor", "Mercado do Construtor", "Outra"]
+            for empresa in empresas_padrao:
+                criar_empresa_se_nao_existir(db, empresa)
 
-    if not db.query(UserModel).first():
-        rh_user = UserModel(
-            nome="Fernanda Silva",
-            email="rh@feedrh.com",
-            empresa="Elevare",
-            perfil="RH",
-            senha_hash=hash_senha("rh@123")
-        )
-        gestor_user = UserModel(
-            nome="Carlos Souza",
-            email="gestor@feedrh.com",
-            empresa="Ora Empresas",
-            perfil="GESTOR",
-            senha_hash=hash_senha("gestor@123")
-        )
-        db.add(rh_user)
-        db.add(gestor_user)
-        db.commit()
-    db.close()
+        if not db.query(UserModel).first():
+            rh_user = UserModel(
+                nome="Fernanda Silva",
+                email="rh@feedrh.com",
+                empresa="Elevare",
+                perfil="RH",
+                senha_hash=hash_senha("rh@123")
+            )
+            gestor_user = UserModel(
+                nome="Carlos Souza",
+                email="gestor@feedrh.com",
+                empresa="Ora Empresas",
+                perfil="GESTOR",
+                senha_hash=hash_senha("gestor@123")
+            )
+            db.add(rh_user)
+            db.add(gestor_user)
+            db.commit()
+    finally:
+        db.close()
 
 # --- Routes ---
 

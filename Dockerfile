@@ -7,5 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 
-EXPOSE 3008
-CMD ["fastapi", "run", "main.py", "--host", "0.0.0.0", "--port", "3008"]
+EXPOSE 3007
+CMD ["fastapi", "run", "main.py", "--host", "0.0.0.0", "--port", "3007"]

@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3008:3008"
+      - "3008:3007"
     volumes:
       - ./backend:/app
     environment:
