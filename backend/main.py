@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, Query
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, Response
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional
 from datetime import datetime
@@ -259,6 +259,10 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"status": "ok", "service": "FeedRh API"}
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
 
 @app.get("/health")
 def health():
