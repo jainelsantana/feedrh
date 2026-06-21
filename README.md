@@ -110,9 +110,16 @@ URLs locais:
 | ReDoc | http://localhost:3007/redoc |
 | PostgreSQL | localhost:5432 |
 
-No container do frontend, as chamadas do Angular usam `/api` e o Nginx encaminha esse prefixo para o serviço `backend:3007`. Assim o navegador acessa a API pelo mesmo host do frontend, sem depender de `localhost` na máquina do usuário.
+No container do frontend, as chamadas do Angular usam `/api` e o Nginx encaminha esse prefixo para o domínio público do backend. Assim o Angular não guarda a URL pública da API no bundle e o navegador continua chamando a API pelo mesmo host do frontend.
 
-No Coolify, publique este projeto como um unico stack Docker Compose com os serviços `frontend`, `backend` e `db` juntos. Se frontend e backend forem criados como apps separados, o Nginx do frontend nao conseguira resolver o hostname `backend` e pode falhar com `host not found in upstream "backend"`.
+No Coolify, o deploy atual foi preparado para frontend e backend como apps separados:
+
+- Backend: base directory `/backend`, Dockerfile `/Dockerfile`, porta interna `3007`.
+- Frontend: base directory `/frontend`, Dockerfile `/Dockerfile`, porta interna `80`.
+- O `frontend/nginx.conf` encaminha `/api/` para `http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io/`.
+- Configure no backend `APP_URL=http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io` para liberar a origem pública do frontend no CORS.
+
+Nao use `proxy_pass http://backend:3007/` quando frontend e backend forem apps separados no Coolify, pois esse hostname só existe quando ambos estão no mesmo Docker Compose/rede Docker.
 
 O `docker-compose.yml` injeta no backend:
 
@@ -162,8 +169,8 @@ APP_URL=http://localhost:4200
 API_URL=/api
 ```
 
-`APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha.
-`API_URL` é usada no build do frontend para apontar para a API. Em deploy com o Nginx deste projeto, mantenha `/api`; use uma URL absoluta somente se o frontend e o backend forem publicados em domínios separados.
+`APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha, e também entra na lista de origens permitidas pelo CORS do backend.
+`API_URL` é usada no build do frontend. Em produção, mantenha `/api`; o Nginx do frontend é quem encaminha a requisição para o backend público.
 
 ## Dados iniciais
 

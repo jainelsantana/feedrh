@@ -384,13 +384,32 @@ class EtapaFunilUpdate(BaseModel):
 
 RESET_PASSWORD_PUBLIC_MESSAGE = "Se o e-mail informado estiver cadastrado, você receberá instruções para redefinir sua senha."
 RESET_PASSWORD_EXPIRED_MESSAGE = "Link inválido ou expirado. Solicite uma nova recuperação de senha."
+DEFAULT_FRONTEND_URL = "http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io"
+
+def get_cors_origins() -> List[str]:
+    origins = {
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+        DEFAULT_FRONTEND_URL,
+    }
+
+    for env_name in ("APP_URL", "FRONTEND_URL", "CORS_ORIGINS"):
+        value = os.getenv(env_name)
+        if not value:
+            continue
+        for origin in value.split(","):
+            clean_origin = origin.strip().rstrip("/")
+            if clean_origin:
+                origins.add(clean_origin)
+
+    return sorted(origins)
 
 # FastAPI App
 app = FastAPI(title="FeedRh API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
