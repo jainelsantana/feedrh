@@ -31,6 +31,13 @@ interface UsuarioEditState {
         <p class="text-gray-500 mt-1">Cadastre usuários do RH, Gestores e empresas disponíveis na plataforma.</p>
       </div>
 
+      <div *ngIf="mensagemUsuario" class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
+        {{ mensagemUsuario }}
+      </div>
+      <div *ngIf="erroUsuario" class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+        {{ erroUsuario }}
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="space-y-6">
         <!-- Formulário de Cadastro -->
@@ -69,6 +76,9 @@ interface UsuarioEditState {
                 </button>
               </div>
               <p *ngIf="senhaRef.invalid && senhaRef.touched" class="text-xs text-red-500 mt-1">Mínimo de 6 caracteres.</p>
+              <p *ngIf="novoUsuario.perfil === 'GESTOR'" class="mt-2 rounded-lg bg-purple-50 px-3 py-2 text-xs font-medium text-rh-dark">
+                Ao cadastrar um gestor, essa senha será enviada por e-mail para o endereço informado.
+              </p>
             </div>
 
             <div>
@@ -231,6 +241,12 @@ interface UsuarioEditState {
 
                   <td class="p-4">
                     <div *ngIf="usuarioEditandoId !== u.id; else editarAcoesUsuario" class="flex items-center justify-end gap-2">
+                      <button *ngIf="u.perfil === 'GESTOR'" type="button" (click)="resetarSenhaGestor(u)" [disabled]="resetandoSenhaId === u.id"
+                        title="Resetar senha"
+                        class="h-8 rounded-md border border-blue-200 px-2 text-blue-700 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-wait">
+                        <span class="material-icons text-base">{{ resetandoSenhaId === u.id ? 'sync' : 'lock_reset' }}</span>
+                        <span class="hidden xl:inline text-xs font-semibold">Resetar senha</span>
+                      </button>
                       <button type="button" (click)="editarUsuario(u)" title="Editar usuário"
                         class="h-8 w-8 rounded-md border border-purple-200 text-rh-purple hover:bg-purple-50 transition-colors flex items-center justify-center">
                         <span class="material-icons text-base">edit</span>
@@ -270,6 +286,9 @@ export class UserManagementComponent implements OnInit {
   empresaEditandoId: number | null = null;
   empresaEmEdicao = '';
   usuarioEditandoId: number | null = null;
+  resetandoSenhaId: number | null = null;
+  mensagemUsuario = '';
+  erroUsuario = '';
   usuarioEmEdicao: UsuarioEditState = {
     nome: '',
     email: '',
@@ -315,12 +334,22 @@ export class UserManagementComponent implements OnInit {
   }
 
   cadastrarUsuario(): void {
+    this.mensagemUsuario = '';
+    this.erroUsuario = '';
+    const perfilCriado = this.novoUsuario.perfil;
     this.userService.createUser(this.novoUsuario).subscribe({
       next: (user) => {
         this.usuarios.push(user);
         this.novoUsuario = { nome: '', email: '', senha: '', empresa: '', perfil: 'GESTOR' };
+        if (perfilCriado === 'GESTOR') {
+          this.mensagemUsuario = user.email_enviado
+            ? 'Gestor cadastrado com sucesso. E-mail de acesso enviado ao gestor.'
+            : 'Gestor cadastrado, mas não foi possível enviar o e-mail de acesso. Verifique as configurações SMTP.';
+        } else {
+          this.mensagemUsuario = 'Usuário cadastrado com sucesso.';
+        }
       },
-      error: (err) => alert(err.error?.detail || 'Erro ao cadastrar usuário.')
+      error: (err) => this.erroUsuario = err.error?.detail || 'Erro ao cadastrar usuário.'
     });
   }
 
@@ -378,6 +407,34 @@ export class UserManagementComponent implements OnInit {
         this.usuarios = this.usuarios.filter(item => item.id !== usuario.id);
       },
       error: (err) => alert(err.error?.detail || 'Erro ao apagar usuário.')
+    });
+  }
+
+  resetarSenhaGestor(usuario: UserResponse): void {
+    const confirmar = confirm(`Deseja gerar uma nova senha e enviar para ${usuario.nome}?`);
+    if (!confirmar) {
+      return;
+    }
+
+    this.mensagemUsuario = '';
+    this.erroUsuario = '';
+    this.resetandoSenhaId = usuario.id;
+    this.userService.resetPassword(usuario.id).subscribe({
+      next: (resposta) => {
+        this.resetandoSenhaId = null;
+        this.usuarios = this.usuarios.map(item =>
+          item.id === usuario.id
+            ? { ...item, ultimo_reset_senha: new Date().toISOString(), updated_at: new Date().toISOString() }
+            : item
+        );
+        this.mensagemUsuario = resposta.email_enviado
+          ? 'Senha resetada com sucesso. Nova senha enviada ao gestor por e-mail.'
+          : 'Senha resetada, mas não foi possível enviar o e-mail. Verifique as configurações SMTP.';
+      },
+      error: (err) => {
+        this.resetandoSenhaId = null;
+        this.erroUsuario = err.error?.detail || 'Erro ao resetar senha do gestor.';
+      }
     });
   }
 

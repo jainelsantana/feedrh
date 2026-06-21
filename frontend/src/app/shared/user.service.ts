@@ -10,6 +10,20 @@ export interface UserResponse {
   email: string;
   empresa: string;
   perfil: 'RH' | 'GESTOR';
+  must_change_password?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  ultimo_reset_senha?: string | null;
+}
+
+export interface UserCreateResponse extends UserResponse {
+  message: string;
+  email_enviado?: boolean | null;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+  email_enviado: boolean;
 }
 
 @Injectable({
@@ -31,8 +45,8 @@ export class UserService {
     return this.http.get<UserResponse[]>(this.apiUrl, { headers: this.getHeaders() });
   }
 
-  createUser(user: Omit<UserResponse, 'id'> & { senha: string }): Observable<UserResponse> {
-    return this.http.post<UserResponse>(this.apiUrl, user, { headers: this.getHeaders() });
+  createUser(user: Pick<UserResponse, 'nome' | 'email' | 'empresa' | 'perfil'> & { senha: string }): Observable<UserCreateResponse> {
+    return this.http.post<UserCreateResponse>(this.apiUrl, user, { headers: this.getHeaders() });
   }
 
   updateUser(id: number, user: Omit<UserResponse, 'id'>): Observable<UserResponse> {
@@ -41,5 +55,9 @@ export class UserService {
 
   deleteUser(id: number): Observable<{ detail: string }> {
     return this.http.delete<{ detail: string }>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() });
+  }
+
+  resetPassword(id: number): Observable<ResetPasswordResponse> {
+    return this.http.post<ResetPasswordResponse>(`${this.apiUrl}/${id}/reset-password`, {}, { headers: this.getHeaders() });
   }
 }

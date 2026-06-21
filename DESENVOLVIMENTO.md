@@ -160,6 +160,14 @@ backend/
 └── Dockerfile                 # Imagem Docker
 ```
 
+### Funcionalidades recentes
+
+- Relatórios RH usam `GET /vagas/relatorio` e podem ser exportados por `GET /vagas/relatorio/pdf` e `GET /vagas/relatorio/excel`.
+- Os filtros compartilhados de relatório/listagem são `gestor_id`, `empresa`, `senioridade`, `etapa_funil`, `status_decisao`, `data_inicio` e `data_fim`.
+- Cadastro de usuário `GESTOR` envia e-mail de acesso inicial via SMTP, sem bloquear o cadastro caso o envio falhe.
+- Reset de senha de gestor fica em `POST /users/{user_id}/reset-password`, exige perfil `RH`, gera senha temporária segura e não retorna a senha na resposta.
+- O banco é ajustado no startup por rotinas `garantir_colunas_*`; para novas colunas, manter esse padrão de compatibilidade.
+
 ---
 
 ## 🔄 Workflow de Desenvolvimento

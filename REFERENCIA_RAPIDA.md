@@ -84,7 +84,7 @@ MAIL_USE_SSL=false
 APP_URL=http://localhost:4200
 ```
 
-O backend usa essas variáveis para notificar automaticamente o gestor quando houver avanço na vaga.
+O backend usa essas variáveis para notificar automaticamente o gestor quando houver avanço na vaga, envio de acesso inicial e reset de senha.
 Falhas de envio são registradas nos logs do backend.
 
 ---
@@ -105,12 +105,16 @@ ReportComponent             → Relatórios
 ### Backend
 
 ```
-POST   /api/auth/login      → Login
-GET    /api/users           → Listar usuários
-POST   /api/users           → Criar usuário
-GET    /api/vagas           → Listar vagas
-POST   /api/vagas           → Criar vaga
-GET    /api/empresas        → Listar empresas
+POST   /auth/login                    → Login
+GET    /users                         → Listar usuários (RH)
+POST   /users                         → Criar usuário (RH)
+POST   /users/{id}/reset-password     → Resetar senha de gestor (RH)
+GET    /vagas                         → Listar vagas
+POST   /vagas                         → Criar vaga
+GET    /vagas/relatorio               → Relatório RH em JSON
+GET    /vagas/relatorio/pdf           → Exportar relatório em PDF
+GET    /vagas/relatorio/excel         → Exportar relatório em Excel
+GET    /empresas                      → Listar empresas
 ```
 
 ---
@@ -125,9 +129,12 @@ GET    /api/empresas        → Listar empresas
   email: string,
   empresa: string,
   perfil: "RH" | "GESTOR",
-  senha_hash: string
+  must_change_password?: boolean,
+  ultimo_reset_senha?: string | null
 }
 ```
+
+`senha_hash` permanece apenas no banco e não deve aparecer nas respostas da API.
 
 ### Vaga
 ```typescript

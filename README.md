@@ -12,7 +12,10 @@ Status atual: em desenvolvimento, com execução local via Docker Compose.
 - Aprovar, congelar, negar ou retornar vagas para decisão.
 - Avançar ou retroceder vagas no funil seletivo de 9 etapas.
 - Consultar relatórios por empresa, gestor, senioridade e etapa.
+- Exportar relatórios de vagas em PDF e Excel (`.xlsx`).
 - Acompanhar histórico de decisões.
+- Cadastrar gestores com envio automático dos dados de acesso por e-mail.
+- Resetar senha de gestores com geração segura de senha temporária.
 
 ### Gestor
 - Criar requisições de vagas.
@@ -22,6 +25,8 @@ Status atual: em desenvolvimento, com execução local via Docker Compose.
 
 ### Notificações
 - Envio automático ao gestor responsável pela vaga.
+- Envio automático dos dados de acesso quando o RH cadastra um gestor.
+- Envio automático de nova senha temporária quando o RH reseta a senha de um gestor.
 - Assunto no padrão `Avanço na vaga: Nome da vaga`.
 - Corpo em texto puro e HTML responsivo.
 - Template visual alinhado ao FeedRH, com cabeçalho roxo, card de resumo, barra de progresso, detalhes da vaga e botão para o dashboard.
@@ -44,6 +49,8 @@ Status atual: em desenvolvimento, com execução local via Docker Compose.
 - PostgreSQL
 - python-dotenv
 - SMTP via biblioteca padrão `smtplib`
+- ReportLab para exportação PDF
+- openpyxl para exportação Excel
 
 ### Infra local
 - Docker
@@ -145,7 +152,7 @@ APP_URL=http://localhost:4200
 API_URL=https://api.seudominio.com.br
 ```
 
-`APP_URL` é usado no botão "Ver no dashboard" do template de e-mail.
+`APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha.
 `API_URL` é usada no build do frontend para apontar para o backend.
 
 ## Dados iniciais
@@ -213,10 +220,13 @@ POST /auth/login
 POST   /users
 GET    /users
 PATCH  /users/{user_id}
+POST   /users/{user_id}/reset-password
 DELETE /users/{user_id}
 ```
 
 As rotas de usuários exigem perfil `RH`, exceto login.
+`POST /users` retorna também `email_enviado` quando o usuário criado é `GESTOR`.
+`POST /users/{user_id}/reset-password` só aceita usuários `GESTOR`, gera senha temporária segura, atualiza o hash e retorna se o e-mail foi enviado.
 
 ### Empresas
 
@@ -237,17 +247,25 @@ GET   /vagas
 PATCH /vagas/{vaga_id}/decisao-diretoria
 PATCH /vagas/{vaga_id}/etapa-funil
 GET   /vagas/relatorio
+GET   /vagas/relatorio/pdf
+GET   /vagas/relatorio/excel
 ```
 
-Filtros aceitos em `GET /vagas`:
+Filtros aceitos em `GET /vagas`, `GET /vagas/relatorio`, `GET /vagas/relatorio/pdf` e `GET /vagas/relatorio/excel`:
 
 ```text
 gestor_id
+empresa
+senioridade
+etapa_funil=1..9
+status_decisao=Pendente|Aprovada|Congelada|Negada
 data_inicio=YYYY-MM-DD
 data_fim=YYYY-MM-DD
 ```
 
-`GET /vagas/relatorio` é restrito ao perfil `RH`.
+Os endpoints de relatório são restritos ao perfil `RH`. O PDF é retornado como `application/pdf`; o Excel é retornado como `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
+O Excel contém as abas `Vagas`, `Resumo` e `Histórico`. O PDF contém título, data/hora de geração, filtros aplicados, resumo, tabela principal e detalhes/histórico por vaga.
 
 ## Modelo de dados principal
 
@@ -260,9 +278,14 @@ data_fim=YYYY-MM-DD
   "email": str,
   "empresa": str,
   "perfil": "RH" | "GESTOR",
-  "senha_hash": str
+  "must_change_password": bool,
+  "created_at": datetime | None,
+  "updated_at": datetime | None,
+  "ultimo_reset_senha": datetime | None
 }
 ```
+
+`senha_hash` existe apenas no banco e não é retornado pelas respostas da API.
 
 ### Empresa
 
@@ -339,6 +362,8 @@ Quando a vaga chega na etapa 9, `data_finalizacao` é preenchida automaticamente
 - O sistema registra histórico de decisões em `vagas_historico`.
 - Mudanças de decisão e mudanças de etapa notificam o gestor por e-mail.
 - Para gestores, `GET /vagas` retorna somente vagas criadas pelo próprio usuário.
+- Relatórios gerais e exportações são exclusivos do perfil `RH`.
+- Cadastro e reset de senha de gestor não registram senha em log nem retornam senha pela API.
 
 ## Desenvolvimento local
 

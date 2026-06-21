@@ -18,6 +18,7 @@ export interface Vaga {
   solicitante_id: number;
   solicitante_nome?: string;
   solicitante_email?: string;
+  solicitante_empresa?: string;
   status_decisao_diretoria: string;
   justificativa_negativa?: string;
   quantidade_congelamentos: number;
@@ -40,6 +41,10 @@ export interface VagaHistorico {
 
 export interface VagaFiltros {
   gestor_id?: number | null;
+  empresa?: string;
+  senioridade?: string;
+  etapa_funil?: number | null;
+  status_decisao?: string;
   data_inicio?: string;
   data_fim?: string;
 }
@@ -50,13 +55,23 @@ export interface RelatorioVaga {
   gestor_id: number;
   gestor_nome: string;
   gestor_email?: string | null;
+  gestor_empresa?: string | null;
   data_abertura: string;
   empresa_destinada: string;
   senioridade: string;
+  tipo: string;
   status_decisao_diretoria: string;
   etapa_funil: number;
   etapa_nome: string;
   justificativa_negativa?: string | null;
+  quantidade_congelamentos: number;
+  posicao_fila_rh?: number | null;
+  data_finalizacao?: string | null;
+  resumo_requisitos?: string | null;
+  requisitos_obrigatorios?: string | null;
+  profissional_substituido?: string | null;
+  justificativa_substituicao?: string | null;
+  historico?: VagaHistorico[];
 }
 
 export interface Relatorio {
@@ -95,6 +110,18 @@ export class VagaService {
     if (filtros.gestor_id) {
       params = params.set('gestor_id', filtros.gestor_id.toString());
     }
+    if (filtros.empresa) {
+      params = params.set('empresa', filtros.empresa);
+    }
+    if (filtros.senioridade) {
+      params = params.set('senioridade', filtros.senioridade);
+    }
+    if (filtros.etapa_funil) {
+      params = params.set('etapa_funil', filtros.etapa_funil.toString());
+    }
+    if (filtros.status_decisao) {
+      params = params.set('status_decisao', filtros.status_decisao);
+    }
     if (filtros.data_inicio) {
       params = params.set('data_inicio', filtros.data_inicio);
     }
@@ -131,6 +158,22 @@ export class VagaService {
     return this.http.get<Relatorio>(`${this.apiUrl}/relatorio`, {
       headers: this.getHeaders(),
       params: this.getParams(filtros)
+    });
+  }
+
+  exportRelatorioPdf(filtros?: VagaFiltros): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/relatorio/pdf`, {
+      headers: this.getHeaders(),
+      params: this.getParams(filtros),
+      responseType: 'blob'
+    });
+  }
+
+  exportRelatorioExcel(filtros?: VagaFiltros): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/relatorio/excel`, {
+      headers: this.getHeaders(),
+      params: this.getParams(filtros),
+      responseType: 'blob'
     });
   }
 }
