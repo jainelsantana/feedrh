@@ -49,6 +49,22 @@ export class AuthService {
     );
   }
 
+  public forgotPassword(email: string): Observable<{ detail: string }> {
+    return this.http.post<{ detail: string }>(`${this.apiUrl}/auth/forgot-password`, { email });
+  }
+
+  public resetPassword(
+    token: string,
+    novaSenha: string,
+    confirmarSenha: string
+  ): Observable<{ detail: string }> {
+    return this.http.post<{ detail: string }>(`${this.apiUrl}/auth/reset-password`, {
+      token,
+      nova_senha: novaSenha,
+      confirmar_senha: confirmarSenha
+    });
+  }
+
   public logout(): void {
     localStorage.removeItem('feedrh_user');
     this.currentUserSubject.next(null);

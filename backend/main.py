@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr
 from html import escape
@@ -22,6 +22,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -104,6 +105,15 @@ ETAPAS_FUNIL = {
 def hash_senha(senha: str) -> str:
     return hashlib.sha256(senha.encode()).hexdigest()
 
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def validar_nova_senha(nova_senha: str, confirmar_senha: str):
+    if nova_senha != confirmar_senha:
+        raise HTTPException(status_code=400, detail="As senhas não conferem.")
+    if len(nova_senha) < 6:
+        raise HTTPException(status_code=400, detail="A senha deve ter no mínimo 6 caracteres.")
+
 # SQLAlchemy Models
 class UserModel(Base):
     __tablename__ = "users"
@@ -117,6 +127,15 @@ class UserModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     ultimo_reset_senha = Column(DateTime, nullable=True)
+
+class PasswordResetTokenModel(Base):
+    __tablename__ = "password_reset_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=False)
+    token_hash = Column(String, unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
 
 class EmpresaModel(Base):
     __tablename__ = "empresas"
@@ -238,6 +257,14 @@ class LoginResponse(BaseModel):
     empresa: str
     perfil: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    nova_senha: str
+    confirmar_senha: str
+
 class UserCreate(BaseModel):
     nome: str
     email: str
@@ -354,6 +381,9 @@ class DecisaoDiretoriaUpdate(BaseModel):
 
 class EtapaFunilUpdate(BaseModel):
     etapa: int
+
+RESET_PASSWORD_PUBLIC_MESSAGE = "Se o e-mail informado estiver cadastrado, você receberá instruções para redefinir sua senha."
+RESET_PASSWORD_EXPIRED_MESSAGE = "Link inválido ou expirado. Solicite uma nova recuperação de senha."
 
 # FastAPI App
 app = FastAPI(title="FeedRh API")
@@ -573,6 +603,69 @@ def enviar_email_notificacao(destinatario: str, assunto: str, corpo: str, corpo_
     except Exception:
         logger.error("Não foi possível enviar e-mail de notificação para %s", destinatario, exc_info=True)
         return False
+
+def montar_email_recuperacao_senha_html(nome: str, link: str) -> str:
+    usuario_nome = escape(nome or "")
+    reset_link = escape(link, quote=True)
+    saudacao = f"Olá, {usuario_nome}." if usuario_nome else "Olá."
+
+    return f"""<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      @media only screen and (max-width: 640px) {{
+        .container {{ width: 100% !important; }}
+        .content {{ padding: 24px 18px 30px !important; }}
+        .hero {{ padding: 30px 22px !important; }}
+        .title {{ font-size: 27px !important; line-height: 34px !important; }}
+        .button {{ display: block !important; }}
+      }}
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background:#F3E5F5; font-family:Inter, Arial, Helvetica, sans-serif; color:#1F2937;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Recebemos uma solicitação para redefinir sua senha no FEEDRH.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3E5F5; padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" class="container" width="620" cellpadding="0" cellspacing="0" style="width:620px; max-width:620px; background:#FFFFFF; border-radius:20px; overflow:hidden; box-shadow:0 18px 45px rgba(49,27,146,0.14); border:1px solid #E9D5FF;">
+            <tr>
+              <td class="hero" style="padding:34px; background:#6200EE;">
+                <p style="margin:0; color:#EDE7FF; font-size:13px; line-height:18px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase;">FeedRH</p>
+                <h1 class="title" style="margin:18px 0 8px; color:#FFFFFF; font-size:30px; line-height:36px; font-weight:800;">Redefinição de senha</h1>
+                <p style="margin:0; color:#EDE7FF; font-size:15px; line-height:24px;">{saudacao}</p>
+              </td>
+            </tr>
+            <tr>
+              <td class="content" style="padding:30px 34px 34px;">
+                <p style="margin:0 0 18px; color:#1F2937; font-size:16px; line-height:25px;">
+                  Recebemos uma solicitação para redefinir a senha da sua conta no FEEDRH.
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                  <tr>
+                    <td align="center">
+                      <a class="button" href="{reset_link}" style="display:inline-block; background:#6200EE; color:#FFFFFF; text-decoration:none; border-radius:12px; padding:14px 24px; font-size:14px; line-height:18px; font-weight:800;">
+                        Redefinir senha
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <div style="background:#FAF7FF; border:1px solid #E9D5FF; border-radius:14px; padding:16px 18px;">
+                  <p style="margin:0 0 8px; color:#311B92; font-size:14px; line-height:21px; font-weight:800;">Este link expira em 30 minutos.</p>
+                  <p style="margin:0; color:#6B7280; font-size:13px; line-height:20px;">Se você não solicitou essa recuperação, ignore este e-mail.</p>
+                </div>
+                <p style="margin:24px 0 0; color:#6B7280; font-size:12px; line-height:19px; text-align:center;">
+                  Atenciosamente,<br>Sistema de Recrutamento
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>"""
 
 def montar_email_avanco_html(vaga: VagaModel, gestor: UserModel, resumo: str) -> str:
     etapa_nome = ETAPAS_FUNIL.get(vaga.etapa_funil, f"Etapa {vaga.etapa_funil}")
@@ -1253,6 +1346,87 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         empresa=user.empresa,
         perfil=user.perfil
     )
+
+@app.post("/auth/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    user = db.query(UserModel).filter(UserModel.email.ilike(email)).first()
+
+    if user:
+        agora = datetime.utcnow()
+        db.query(PasswordResetTokenModel).filter(
+            PasswordResetTokenModel.user_id == user.id,
+            PasswordResetTokenModel.used_at.is_(None),
+        ).update(
+            {PasswordResetTokenModel.used_at: agora},
+            synchronize_session=False,
+        )
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hash_token(token)
+        expires_at = agora + timedelta(minutes=30)
+
+        reset_token = PasswordResetTokenModel(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        db.add(reset_token)
+        db.commit()
+
+        app_url = (
+            os.getenv("APP_URL")
+            or os.getenv("FRONTEND_URL")
+            or "http://localhost:4200"
+        ).rstrip("/")
+        reset_url = f"{app_url}/redefinir-senha?token={token}"
+        assunto = "Redefinição de senha - FEEDRH"
+        corpo = (
+            f"Olá{', ' + user.nome if user.nome else ''},\n\n"
+            "Recebemos uma solicitação para redefinir a senha da sua conta no FEEDRH.\n\n"
+            f"Acesse o link abaixo para criar uma nova senha:\n{reset_url}\n\n"
+            "Este link expira em 30 minutos.\n\n"
+            "Se você não solicitou essa recuperação, ignore este e-mail."
+        )
+        corpo_html = montar_email_recuperacao_senha_html(user.nome, reset_url)
+        enviar_email_notificacao(user.email, assunto, corpo, corpo_html)
+
+    return {"detail": RESET_PASSWORD_PUBLIC_MESSAGE}
+
+@app.post("/auth/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    validar_nova_senha(payload.nova_senha, payload.confirmar_senha)
+
+    token = payload.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail=RESET_PASSWORD_EXPIRED_MESSAGE)
+
+    token_hash = hash_token(token)
+    reset_token = (
+        db.query(PasswordResetTokenModel)
+        .filter(PasswordResetTokenModel.token_hash == token_hash)
+        .first()
+    )
+
+    if not reset_token or not hmac.compare_digest(reset_token.token_hash, token_hash):
+        raise HTTPException(status_code=400, detail=RESET_PASSWORD_EXPIRED_MESSAGE)
+    if reset_token.used_at is not None:
+        raise HTTPException(status_code=400, detail=RESET_PASSWORD_EXPIRED_MESSAGE)
+    if reset_token.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail=RESET_PASSWORD_EXPIRED_MESSAGE)
+
+    user = db.query(UserModel).filter(UserModel.id == reset_token.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail=RESET_PASSWORD_EXPIRED_MESSAGE)
+
+    agora = datetime.utcnow()
+    user.senha_hash = hash_senha(payload.nova_senha)
+    user.updated_at = agora
+    user.must_change_password = False
+    reset_token.used_at = agora
+    db.commit()
+
+    return {"detail": "Senha redefinida com sucesso."}
 
 @app.post("/users", response_model=UserCreateResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db), current_user: UserModel = Depends(require_rh)):

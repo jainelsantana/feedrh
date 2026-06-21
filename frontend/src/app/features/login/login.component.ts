@@ -1,13 +1,13 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-rh-dark via-rh-purple to-rh-neon px-4 pt-8 pb-16">
       
@@ -61,6 +61,12 @@ import { AuthService } from '../../core/auth.service';
                   <span class="material-icons text-lg">{{ mostrarSenha ? 'visibility_off' : 'visibility' }}</span>
                 </button>
               </div>
+            </div>
+
+            <div class="text-right -mt-2">
+              <a routerLink="/recuperar-senha" class="text-sm font-semibold text-rh-purple hover:text-rh-neon transition-colors">
+                Esqueci minha senha
+              </a>
             </div>
 
             <!-- Botão -->
