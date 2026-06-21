@@ -82,8 +82,8 @@ feedrh/
 Fluxo principal:
 
 ```text
-Angular/Nginx -> FastAPI -> SQLAlchemy -> PostgreSQL
-                         -> SMTP -> E-mail do gestor
+Angular/Nginx -> /api -> FastAPI -> SQLAlchemy -> PostgreSQL
+                              -> SMTP -> E-mail do gestor
 ```
 
 ## Execução com Docker
@@ -110,10 +110,18 @@ URLs locais:
 | ReDoc | http://localhost:3007/redoc |
 | PostgreSQL | localhost:5432 |
 
+No container do frontend, as chamadas do Angular usam `/api` e o Nginx encaminha esse prefixo para o serviço `backend:3007`. Assim o navegador acessa a API pelo mesmo host do frontend, sem depender de `localhost` na máquina do usuário.
+
 O `docker-compose.yml` injeta no backend:
 
 ```env
 DB_URL=postgresql+psycopg2://feedrh:feedrh@db:5432/feedrh
+```
+
+E usa este padrão no build do frontend:
+
+```env
+API_URL=/api
 ```
 
 ## Configuração do `.env`
@@ -134,7 +142,7 @@ MAIL_FROM_NAME=Sistema de Recrutamento
 MAIL_USE_TLS=true
 MAIL_USE_SSL=false
 APP_URL=http://localhost:4200
-API_URL=http://localhost:3007
+API_URL=/api
 ```
 
 Exemplo para SMTP com SSL na porta 465:
@@ -149,11 +157,11 @@ MAIL_FROM_NAME=Sistema de Recrutamento
 MAIL_USE_TLS=false
 MAIL_USE_SSL=true
 APP_URL=http://localhost:4200
-API_URL=https://api.seudominio.com.br
+API_URL=/api
 ```
 
 `APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha.
-`API_URL` é usada no build do frontend para apontar para o backend.
+`API_URL` é usada no build do frontend para apontar para a API. Em deploy com o Nginx deste projeto, mantenha `/api`; use uma URL absoluta somente se o frontend e o backend forem publicados em domínios separados.
 
 ## Dados iniciais
 
@@ -206,7 +214,7 @@ Perfis:
 
 ## Endpoints do backend
 
-As rotas atuais não usam prefixo `/api`.
+As rotas internas do FastAPI não usam prefixo `/api`. O prefixo `/api` é aplicado apenas pelo Nginx do frontend em ambientes containerizados e removido antes de encaminhar a requisição ao backend.
 
 ### Autenticação
 
@@ -397,6 +405,8 @@ O serviço Angular chama o backend em:
 http://localhost:3007
 ```
 
+No build de produção, o Angular usa `/api` por padrão e depende do proxy configurado em `frontend/nginx.conf`.
+
 ## Testes e validações úteis
 
 Build do frontend:
@@ -449,8 +459,10 @@ docker-compose down -v
 ### Frontend não conecta no backend
 
 - Verifique se o backend está em `http://localhost:3007`.
+- Se estiver usando Docker/produção, verifique também `http://localhost:4200/api/docs`; esse caminho deve ser encaminhado pelo Nginx para o Swagger do backend.
 - Confira o console do navegador.
 - Veja `docker-compose logs backend`.
+- Veja `docker-compose logs frontend` se o erro envolver proxy, `502` ou rota `/api`.
 
 ### E-mail não é enviado
 

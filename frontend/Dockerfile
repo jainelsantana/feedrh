@@ -2,7 +2,7 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-ARG API_URL
+ARG API_URL=/api
 ENV API_URL=${API_URL}
 
 RUN apk add --no-cache gettext
