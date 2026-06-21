@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - feedrh_network
 
   backend:
     build:
@@ -30,6 +32,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3007/health', timeout=2)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - feedrh_network
 
   frontend:
     build:
@@ -40,7 +50,14 @@ services:
     ports:
       - "4200:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - feedrh_network
 
 volumes:
   postgres_data:
+
+networks:
+  feedrh_network:
+    driver: bridge

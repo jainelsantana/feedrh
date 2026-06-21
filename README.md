@@ -112,6 +112,8 @@ URLs locais:
 
 No container do frontend, as chamadas do Angular usam `/api` e o Nginx encaminha esse prefixo para o serviço `backend:3007`. Assim o navegador acessa a API pelo mesmo host do frontend, sem depender de `localhost` na máquina do usuário.
 
+No Coolify, publique este projeto como um unico stack Docker Compose com os serviços `frontend`, `backend` e `db` juntos. Se frontend e backend forem criados como apps separados, o Nginx do frontend nao conseguira resolver o hostname `backend` e pode falhar com `host not found in upstream "backend"`.
+
 O `docker-compose.yml` injeta no backend:
 
 ```env
