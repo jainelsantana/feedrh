@@ -41,6 +41,18 @@ import { filter } from 'rxjs';
 
             <!-- Usuário + Logout -->
             <div class="flex items-center gap-3">
+              <div class="theme-switch liquid-glass hidden lg:flex" [ngClass]="'theme-switch--' + themeMode">
+                <span class="theme-switch__thumb"></span>
+                <button type="button" (click)="setThemeMode('light')" title="Tema claro" aria-label="Tema claro" class="theme-switch__button" [ngClass]="themeMode === 'light' ? 'theme-switch__button--active' : ''">
+                  <span class="material-icons text-[16px]">light_mode</span>
+                </button>
+                <button type="button" (click)="setThemeMode('dark')" title="Tema escuro" aria-label="Tema escuro" class="theme-switch__button" [ngClass]="themeMode === 'dark' ? 'theme-switch__button--active' : ''">
+                  <span class="material-icons text-[16px]">dark_mode</span>
+                </button>
+                <button type="button" (click)="setThemeMode('system')" title="Usar tema do sistema" aria-label="Usar tema do sistema" class="theme-switch__button" [ngClass]="themeMode === 'system' ? 'theme-switch__button--active' : ''">
+                  <span class="material-icons text-[16px]">devices</span>
+                </button>
+              </div>
               <div class="hidden sm:flex items-center gap-2 text-sm text-purple-200">
                 <span class="material-icons text-base">account_circle</span>
                 <span class="font-semibold">{{ usuarioLogado?.nome }}</span>
@@ -67,8 +79,25 @@ import { filter } from 'rxjs';
           <a *ngIf="usuarioLogado?.perfil === 'RH'" routerLink="/rh/decisoes" routerLinkActive="text-rh-neon" class="flex flex-col items-center text-xs text-gray-300 hover:text-rh-neon">
             <span class="material-icons">gavel</span><span>Decisões</span>
           </a>
+          <button type="button" (click)="cycleMobileTheme()" class="flex flex-col items-center text-xs text-gray-300 hover:text-rh-neon">
+            <span class="material-icons">{{ resolvedTheme === 'dark' ? 'dark_mode' : 'light_mode' }}</span><span>Tema</span>
+            <span class="text-[10px] leading-none">{{ themeLabel }}</span>
+          </button>
         </div>
       </nav>
+
+      <div *ngIf="isLoginPage" class="theme-switch theme-switch--floating liquid-glass" [ngClass]="'theme-switch--' + themeMode">
+        <span class="theme-switch__thumb"></span>
+        <button type="button" (click)="setThemeMode('light')" title="Tema claro" aria-label="Tema claro" class="theme-switch__button" [ngClass]="themeMode === 'light' ? 'theme-switch__button--active' : ''">
+          <span class="material-icons text-[16px]">light_mode</span>
+        </button>
+        <button type="button" (click)="setThemeMode('dark')" title="Tema escuro" aria-label="Tema escuro" class="theme-switch__button" [ngClass]="themeMode === 'dark' ? 'theme-switch__button--active' : ''">
+          <span class="material-icons text-[16px]">dark_mode</span>
+        </button>
+        <button type="button" (click)="setThemeMode('system')" title="Usar tema do sistema" aria-label="Usar tema do sistema" class="theme-switch__button" [ngClass]="themeMode === 'system' ? 'theme-switch__button--active' : ''">
+          <span class="material-icons text-[16px]">devices</span>
+        </button>
+      </div>
 
       <main class="flex-grow">
         <router-outlet></router-outlet>
@@ -87,10 +116,16 @@ import { filter } from 'rxjs';
 export class AppComponent implements OnInit {
   usuarioLogado: User | null = null;
   isLoginPage = false;
+  themeMode: 'system' | 'light' | 'dark' = 'system';
+  resolvedTheme: 'light' | 'dark' = 'light';
+  private readonly themeStorageKey = 'feedrh_theme';
+  private systemThemeQuery?: MediaQueryList;
 
   constructor(private authService: AuthService, private router: Router) {}
 
   ngOnInit(): void {
+    this.initializeTheme();
+
     this.authService.currentUser$.subscribe(user => {
       this.usuarioLogado = user;
     });
@@ -102,7 +137,52 @@ export class AppComponent implements OnInit {
     });
   }
 
+  setThemeMode(mode: 'system' | 'light' | 'dark'): void {
+    this.themeMode = mode;
+    localStorage.setItem(this.themeStorageKey, mode);
+    this.applyTheme();
+  }
+
+  get themeLabel(): string {
+    if (this.themeMode === 'system') {
+      return 'Sistema';
+    }
+
+    return this.themeMode === 'dark' ? 'Escuro' : 'Claro';
+  }
+
+  cycleMobileTheme(): void {
+    const nextMode = this.themeMode === 'system' ? 'light' : this.themeMode === 'light' ? 'dark' : 'system';
+    this.setThemeMode(nextMode);
+  }
+
   logout(): void {
     this.authService.logout();
+  }
+
+  private initializeTheme(): void {
+    const savedTheme = localStorage.getItem(this.themeStorageKey);
+    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+      this.themeMode = savedTheme;
+    }
+
+    this.systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    this.systemThemeQuery.addEventListener('change', () => {
+      if (this.themeMode === 'system') {
+        this.applyTheme();
+      }
+    });
+
+    this.applyTheme();
+  }
+
+  private applyTheme(): void {
+    const shouldUseDark = this.themeMode === 'dark' || (this.themeMode === 'system' && this.systemThemeQuery?.matches);
+    this.resolvedTheme = shouldUseDark ? 'dark' : 'light';
+
+    const root = document.documentElement;
+    root.classList.toggle('theme-dark', shouldUseDark);
+    root.classList.toggle('theme-light', !shouldUseDark);
+    root.style.colorScheme = shouldUseDark ? 'dark' : 'light';
   }
 }
