@@ -8,7 +8,11 @@ ENV API_URL=${API_URL}
 RUN apk add --no-cache gettext
 
 COPY package*.json ./
-RUN npm install
+RUN if [ -f package-lock.json ]; then \
+        npm ci --no-audit --no-fund; \
+    else \
+        npm install --no-audit --no-fund; \
+    fi
 
 COPY . .
 RUN : "${API_URL:?API_URL build argument is required}" \
