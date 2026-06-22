@@ -117,7 +117,7 @@ No Coolify, o deploy atual foi preparado para frontend e backend como apps separ
 - Backend: base directory `/backend`, Dockerfile `/Dockerfile`, porta interna `3007`.
 - Frontend: base directory `/frontend`, Dockerfile `/Dockerfile`, porta interna `80`.
 - O `frontend/nginx.conf` encaminha `/api/` para `http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io/`.
-- Configure no backend `APP_URL=http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io` para liberar a origem pública do frontend no CORS.
+- Configure no backend `APP_URL=http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io` para liberar a origem pública do frontend no CORS. O backend também aceita a variante `https` dessa origem.
 
 Nao use `proxy_pass http://backend:3007/` quando frontend e backend forem apps separados no Coolify, pois esse hostname só existe quando ambos estão no mesmo Docker Compose/rede Docker.
 
@@ -171,6 +171,7 @@ API_URL=/api
 
 `APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha, e também entra na lista de origens permitidas pelo CORS do backend.
 `API_URL` é usada no build do frontend. Em produção, mantenha `/api`; o Nginx do frontend é quem encaminha a requisição para o backend público.
+`LOG_LEVEL` controla o nível dos logs do backend; use `INFO` no Coolify para ver startup, CORS e rotas principais nos logs.
 
 ## Dados iniciais
 

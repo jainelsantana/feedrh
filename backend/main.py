@@ -30,6 +30,8 @@ import smtplib
 import string
 import time
 
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
+
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR.parent / ".env")
 load_dotenv(BASE_DIR / ".env", override=False)
@@ -386,30 +388,39 @@ RESET_PASSWORD_PUBLIC_MESSAGE = "Se o e-mail informado estiver cadastrado, você
 RESET_PASSWORD_EXPIRED_MESSAGE = "Link inválido ou expirado. Solicite uma nova recuperação de senha."
 DEFAULT_FRONTEND_URL = "http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io"
 
+def add_origin_with_scheme_variants(origins: set[str], origin: str) -> None:
+    clean_origin = origin.strip().rstrip("/")
+    if not clean_origin:
+        return
+
+    origins.add(clean_origin)
+    if clean_origin.startswith("http://"):
+        origins.add("https://" + clean_origin.removeprefix("http://"))
+    elif clean_origin.startswith("https://"):
+        origins.add("http://" + clean_origin.removeprefix("https://"))
+
 def get_cors_origins() -> List[str]:
-    origins = {
-        "http://localhost:4200",
-        "http://127.0.0.1:4200",
-        DEFAULT_FRONTEND_URL,
-    }
+    origins: set[str] = set()
+    for default_origin in ("http://localhost:4200", "http://127.0.0.1:4200", DEFAULT_FRONTEND_URL):
+        add_origin_with_scheme_variants(origins, default_origin)
 
     for env_name in ("APP_URL", "FRONTEND_URL", "CORS_ORIGINS"):
         value = os.getenv(env_name)
         if not value:
             continue
         for origin in value.split(","):
-            clean_origin = origin.strip().rstrip("/")
-            if clean_origin:
-                origins.add(clean_origin)
+            add_origin_with_scheme_variants(origins, origin)
 
     return sorted(origins)
+
+ALLOWED_CORS_ORIGINS = get_cors_origins()
 
 # FastAPI App
 app = FastAPI(title="FeedRh API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_cors_origins(),
+    allow_origins=ALLOWED_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -426,6 +437,10 @@ def favicon():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/api/health", include_in_schema=False)
+def api_health_alias():
+    return health()
 
 # Dependency
 def get_db():
@@ -1322,6 +1337,9 @@ def gerar_excel_relatorio(linhas: List[dict], resumo: dict) -> bytes:
 @app.on_event("startup")
 def startup_event():
     initialize_database()
+    logger.info("FeedRH API iniciada na porta 3007.")
+    logger.info("Origens CORS permitidas: %s", ", ".join(ALLOWED_CORS_ORIGINS))
+    logger.info("Rotas principais ativas: /health, /docs, /openapi.json, /auth/login")
     db = SessionLocal()
     try:
         if not db.query(EmpresaModel).first():
@@ -1352,6 +1370,7 @@ def startup_event():
 
 # --- Routes ---
 
+@app.post("/api/auth/login", response_model=LoginResponse, include_in_schema=False)
 @app.post("/auth/login", response_model=LoginResponse)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     email = credentials.email.strip().lower()
@@ -1366,6 +1385,7 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         perfil=user.perfil
     )
 
+@app.post("/api/auth/forgot-password", include_in_schema=False)
 @app.post("/auth/forgot-password")
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
@@ -1412,6 +1432,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
 
     return {"detail": RESET_PASSWORD_PUBLIC_MESSAGE}
 
+@app.post("/api/auth/reset-password", include_in_schema=False)
 @app.post("/auth/reset-password")
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     validar_nova_senha(payload.nova_senha, payload.confirmar_senha)
