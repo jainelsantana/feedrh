@@ -1,63 +1,58 @@
 # FeedRH
 
-Sistema web para gestão de requisições de vagas, decisão do RH/diretoria, acompanhamento de funil seletivo, relatórios e notificações automáticas por e-mail para gestores.
+FeedRH é um sistema web para gestão de requisições de vagas, decisão de RH/diretoria, acompanhamento do funil seletivo, relatórios e notificações por e-mail para gestores.
 
-Status atual: em desenvolvimento, com execução local via Docker Compose.
+O projeto está em desenvolvimento e pode rodar localmente com Docker Compose ou em produção no Coolify com frontend e backend publicados como apps separados.
 
-## Funcionalidades
+## Visão Geral
 
-### RH
-- Gerenciar usuários e empresas.
-- Visualizar todas as vagas cadastradas.
-- Aprovar, congelar, negar ou retornar vagas para decisão.
-- Avançar ou retroceder vagas no funil seletivo de 9 etapas.
-- Consultar relatórios por empresa, gestor, senioridade e etapa.
-- Exportar relatórios de vagas em PDF e Excel (`.xlsx`).
-- Acompanhar histórico de decisões.
-- Cadastrar gestores com envio automático dos dados de acesso por e-mail.
-- Resetar senha de gestores com geração segura de senha temporária.
+### Perfis
 
-### Gestor
-- Criar requisições de vagas.
-- Visualizar somente as próprias vagas.
-- Acompanhar posição na fila do RH e etapa atual do processo.
-- Receber e-mail automático quando houver avanço ou mudança relevante na vaga.
+- `RH`: gerencia usuários, empresas, decisões, funil, relatórios e exportações.
+- `GESTOR`: cria vagas, acompanha as próprias solicitações e recebe notificações.
 
-### Notificações
-- Envio automático ao gestor responsável pela vaga.
-- Envio automático dos dados de acesso quando o RH cadastra um gestor.
-- Envio automático de nova senha temporária quando o RH reseta a senha de um gestor.
-- Assunto no padrão `Avanço na vaga: Nome da vaga`.
-- Corpo em texto puro e HTML responsivo.
-- Template visual alinhado ao FeedRH, com cabeçalho roxo, card de resumo, barra de progresso, detalhes da vaga e botão para o dashboard.
-- Suporte a SMTP com STARTTLS (`587`) e SSL implícito (`465`).
-- Falhas de envio são registradas nos logs do backend.
+### Funcionalidades
+
+- Cadastro e manutenção de usuários.
+- Cadastro e manutenção de empresas.
+- Abertura de requisições de vagas.
+- Aprovação, congelamento, negação e retorno de vagas para decisão.
+- Histórico de decisões e mudanças de etapa.
+- Funil seletivo com 9 etapas.
+- Relatórios por empresa, gestor, senioridade, status e etapa.
+- Exportação de relatórios em PDF e Excel.
+- Recuperação de senha por e-mail.
+- Reset de senha de gestores pelo RH.
+- E-mails automáticos para acesso inicial, reset de senha e avanços de vaga.
 
 ## Stack
 
 ### Frontend
-- Angular 17.3
-- TypeScript 5.4
-- Tailwind CSS 3.4
+
+- Angular 17
+- TypeScript
+- Tailwind CSS
 - RxJS
-- Nginx no container de produção
+- Nginx em produção
 
 ### Backend
+
 - FastAPI
 - Pydantic
 - SQLAlchemy
 - PostgreSQL
-- python-dotenv
-- SMTP via biblioteca padrão `smtplib`
-- ReportLab para exportação PDF
-- openpyxl para exportação Excel
+- SMTP com `smtplib`
+- ReportLab para PDF
+- openpyxl para Excel
 
-### Infra local
+### Infraestrutura
+
 - Docker
 - Docker Compose
-- PostgreSQL 16 Alpine
+- Coolify
+- PostgreSQL 16 Alpine no ambiente local
 
-## Arquitetura
+## Estrutura
 
 ```text
 feedrh/
@@ -79,324 +74,145 @@ feedrh/
 └── DEPLOYMENT.md
 ```
 
-Fluxo principal:
+## Arquitetura
+
+### Produção com Coolify
+
+Em produção, o frontend e o backend são apps separados.
 
 ```text
-Angular/Nginx -> /api -> FastAPI -> SQLAlchemy -> PostgreSQL
-                              -> SMTP -> E-mail do gestor
+Navegador
+  -> Frontend Angular servido por Nginx
+  -> /api/*
+  -> Nginx do frontend
+  -> BACKEND_URL/*
+  -> FastAPI
+  -> PostgreSQL
+  -> SMTP
 ```
 
-## Execução com Docker
+O Angular sempre chama a API por caminho relativo:
 
-Pré-requisitos:
+```text
+/api/auth/login
+/api/auth/forgot-password
+/api/vagas
+```
 
-- Docker
-- Docker Compose
+O Nginx do frontend remove o prefixo `/api/` ao encaminhar para o backend. Assim:
 
-Passos:
+```text
+/api/auth/login -> BACKEND_URL/auth/login
+```
+
+### Desenvolvimento local
+
+No ambiente local, o Docker Compose sobe:
+
+- `db`
+- `backend`
+- `frontend`
+
+O frontend local fica em `http://localhost:4200` e o backend em `http://localhost:3007`.
+
+## Deploy no Coolify
+
+Configure dois apps independentes.
+
+### Backend
+
+- Build Pack: Dockerfile
+- Base Directory: `/backend`
+- Dockerfile Location: `/Dockerfile`
+- Porta interna: `3007`
+
+Variáveis esperadas:
+
+```env
+APP_URL=https://frontend.seudominio.com
+DATABASE_URL=postgresql+psycopg2://usuario:senha@host:5432/banco
+MAIL_HOST=mail.seudominio.com
+MAIL_PORT=465
+MAIL_USER=usuario_smtp
+MAIL_PASSWORD=senha_smtp
+MAIL_FROM=email_remetente
+MAIL_FROM_NAME=Sistema de Recrutamento
+MAIL_USE_TLS=false
+MAIL_USE_SSL=true
+LOG_LEVEL=INFO
+```
+
+`APP_URL` deve apontar para o frontend público. O backend usa essa variável para:
+
+- liberar CORS;
+- montar links em e-mails;
+- gerar links de recuperação de senha.
+
+Também é possível liberar origens adicionais com:
+
+```env
+FRONTEND_URL=https://frontend.seudominio.com
+CORS_ORIGINS=https://frontend.seudominio.com,https://outro-dominio.com
+```
+
+### Frontend
+
+- Build Pack: Dockerfile
+- Base Directory: `/frontend`
+- Dockerfile Location: `/Dockerfile`
+- Porta interna: `80`
+
+Variáveis esperadas:
+
+```env
+API_URL=/api
+BACKEND_URL=https://api.seudominio.com
+BACKEND_HOST=api.seudominio.com
+```
+
+Regras importantes:
+
+- `API_URL` deve ser sempre relativo, normalmente `/api`.
+- O build rejeita `API_URL` absoluto, como `https://api.seudominio.com`.
+- `BACKEND_URL` deve incluir protocolo e não deve terminar com barra.
+- `BACKEND_HOST` deve conter apenas o host que será enviado no header `Host`.
+- O Nginx gera o arquivo final de configuração em runtime usando `BACKEND_URL` e `BACKEND_HOST`.
+
+## Execução Local com Docker
+
+Crie o `.env`:
 
 ```bash
 cp .env.example .env
-docker-compose up --build
+```
+
+Para usar o Compose local, configure no `.env`:
+
+```env
+API_URL=/api
+BACKEND_URL=http://backend:3007
+BACKEND_HOST=backend
+APP_URL=http://localhost:4200
+```
+
+Suba os serviços:
+
+```bash
+docker compose up --build
 ```
 
 URLs locais:
 
 | Serviço | URL |
 |---|---|
-| Frontend | http://localhost:4200 |
-| Backend | http://localhost:3007 |
-| Swagger | http://localhost:3007/docs |
-| ReDoc | http://localhost:3007/redoc |
-| PostgreSQL | localhost:5432 |
-
-No container do frontend, as chamadas do Angular usam `/api` e o Nginx encaminha esse prefixo para o domínio público do backend. Assim o Angular não guarda a URL pública da API no bundle e o navegador continua chamando a API pelo mesmo host do frontend.
-
-No Coolify, o deploy atual foi preparado para frontend e backend como apps separados:
-
-- Backend: base directory `/backend`, Dockerfile `/Dockerfile`, porta interna `3007`.
-- Frontend: base directory `/frontend`, Dockerfile `/Dockerfile`, porta interna `80`.
-- O `frontend/nginx.conf` é um template; no runtime ele encaminha `/api/` para `${BACKEND_URL}/`.
-- Configure no backend `APP_URL=http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io` para liberar a origem pública do frontend no CORS. O backend também aceita a variante `https` dessa origem.
-
-Nao use `proxy_pass http://backend:3007/` quando frontend e backend forem apps separados no Coolify, pois esse hostname só existe quando ambos estão no mesmo Docker Compose/rede Docker.
-
-O `docker-compose.yml` injeta no backend:
-
-```env
-DB_URL=postgresql+psycopg2://feedrh:feedrh@db:5432/feedrh
-```
-
-E usa este padrão no build do frontend:
-
-```env
-API_URL=/api
-```
-
-No app frontend do Coolify, configure também:
-
-```env
-BACKEND_URL=http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
-BACKEND_HOST=itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
-```
-
-## Configuração do `.env`
-
-O arquivo `.env` é local e está ignorado pelo Git. Nunca versionar credenciais reais.
-
-Modelo atual:
-
-```env
-DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
-
-MAIL_HOST=
-MAIL_PORT=587
-MAIL_USER=
-MAIL_PASSWORD=
-MAIL_FROM=
-MAIL_FROM_NAME=Sistema de Recrutamento
-MAIL_USE_TLS=true
-MAIL_USE_SSL=false
-APP_URL=http://localhost:4200
-API_URL=/api
-BACKEND_URL=http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
-BACKEND_HOST=itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
-LOG_LEVEL=INFO
-```
-
-Exemplo para SMTP com SSL na porta 465:
-
-```env
-MAIL_HOST=mail.seudominio.com.br
-MAIL_PORT=465
-MAIL_USER=naoresponda@seudominio.com.br
-MAIL_PASSWORD=sua-senha
-MAIL_FROM=naoresponda@seudominio.com.br
-MAIL_FROM_NAME=Sistema de Recrutamento
-MAIL_USE_TLS=false
-MAIL_USE_SSL=true
-APP_URL=http://localhost:4200
-API_URL=/api
-BACKEND_URL=https://api.seudominio.com.br
-BACKEND_HOST=api.seudominio.com.br
-```
-
-`APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha, e também entra na lista de origens permitidas pelo CORS do backend.
-`API_URL` é usada no build do frontend. Em produção, mantenha `/api`; o build rejeita URL absoluta para evitar que o Angular chame o domínio do backend diretamente.
-`BACKEND_URL` e `BACKEND_HOST` são usadas pelo Nginx do frontend em runtime, sem rebuild do Angular.
-`LOG_LEVEL` controla o nível dos logs do backend; use `INFO` no Coolify para ver startup, CORS e rotas principais nos logs.
-
-## Dados iniciais
-
-Ao iniciar com banco vazio, o backend cria empresas e usuários padrão.
-
-Empresas padrão:
-
-- Elevare
-- Ora Empresas
-- Mercado do Provedor
-- Mercado do Construtor
-- Outra
-
-Usuários padrão:
-
-| Perfil | E-mail | Senha |
-|---|---|---|
-| RH | `rh@feedrh.com` | `rh@123` |
-| Gestor | `gestor@feedrh.com` | `gestor@123` |
-
-## Autenticação
-
-O login é feito em:
-
-```http
-POST /auth/login
-```
-
-O frontend armazena o usuário autenticado e envia o ID nas chamadas protegidas usando o header:
-
-```http
-X-User-Id: 1
-```
-
-Perfis:
-
-- `RH`: acesso administrativo, decisões, gestão de usuários, empresas, relatórios e alteração de etapas.
-- `GESTOR`: criação e acompanhamento das próprias vagas.
-
-## Rotas do frontend
-
-| Rota | Tela | Perfil |
-|---|---|---|
-| `/login` | Login | Público |
-| `/dashboard` | Dashboard de vagas | RH e Gestor |
-| `/vagas/nova` | Nova vaga | RH e Gestor |
-| `/rh/usuarios` | Gestão de usuários e empresas | RH |
-| `/rh/decisoes` | Painel de decisão | RH |
-| `/rh/relatorios` | Relatórios | RH |
-
-## Endpoints do backend
-
-As rotas internas do FastAPI não usam prefixo `/api`. O prefixo `/api` é aplicado apenas pelo Nginx do frontend em ambientes containerizados e removido antes de encaminhar a requisição ao backend.
-
-### Autenticação
-
-```http
-POST /auth/login
-```
-
-### Usuários
-
-```http
-POST   /users
-GET    /users
-PATCH  /users/{user_id}
-POST   /users/{user_id}/reset-password
-DELETE /users/{user_id}
-```
-
-As rotas de usuários exigem perfil `RH`, exceto login.
-`POST /users` retorna também `email_enviado` quando o usuário criado é `GESTOR`.
-`POST /users/{user_id}/reset-password` só aceita usuários `GESTOR`, gera senha temporária segura, atualiza o hash e retorna se o e-mail foi enviado.
-
-### Empresas
-
-```http
-GET    /empresas
-POST   /empresas
-PATCH  /empresas/{empresa_id}
-DELETE /empresas/{empresa_id}
-```
-
-`GET /empresas` exige usuário autenticado. Criação, edição e remoção exigem `RH`.
-
-### Vagas
-
-```http
-POST  /vagas
-GET   /vagas
-PATCH /vagas/{vaga_id}/decisao-diretoria
-PATCH /vagas/{vaga_id}/etapa-funil
-GET   /vagas/relatorio
-GET   /vagas/relatorio/pdf
-GET   /vagas/relatorio/excel
-```
-
-Filtros aceitos em `GET /vagas`, `GET /vagas/relatorio`, `GET /vagas/relatorio/pdf` e `GET /vagas/relatorio/excel`:
-
-```text
-gestor_id
-empresa
-senioridade
-etapa_funil=1..9
-status_decisao=Pendente|Aprovada|Congelada|Negada
-data_inicio=YYYY-MM-DD
-data_fim=YYYY-MM-DD
-```
-
-Os endpoints de relatório são restritos ao perfil `RH`. O PDF é retornado como `application/pdf`; o Excel é retornado como `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
-
-O Excel contém as abas `Vagas`, `Resumo` e `Histórico`. O PDF contém título, data/hora de geração, filtros aplicados, resumo, tabela principal e detalhes/histórico por vaga.
-
-## Modelo de dados principal
-
-### Usuário
-
-```python
-{
-  "id": int,
-  "nome": str,
-  "email": str,
-  "empresa": str,
-  "perfil": "RH" | "GESTOR",
-  "must_change_password": bool,
-  "created_at": datetime | None,
-  "updated_at": datetime | None,
-  "ultimo_reset_senha": datetime | None
-}
-```
-
-`senha_hash` existe apenas no banco e não é retornado pelas respostas da API.
-
-### Empresa
-
-```python
-{
-  "id": int,
-  "nome": str
-}
-```
-
-### Vaga
-
-```python
-{
-  "id": int,
-  "cargo": str,
-  "data_abertura": datetime,
-  "empresa_destinada": str,
-  "senioridade": str,
-  "resumo_requisitos": str,
-  "requisitos_obrigatorios": str,
-  "tipo": "Nova posição" | "Substituição",
-  "profissional_substituido": str | None,
-  "justificativa_substituicao": str | None,
-  "solicitante_id": int,
-  "status_decisao_diretoria": "Pendente" | "Aprovada" | "Congelada" | "Negada",
-  "justificativa_negativa": str | None,
-  "quantidade_congelamentos": int,
-  "etapa_funil": int,
-  "data_finalizacao": datetime | None
-}
-```
-
-### Histórico da vaga
-
-```python
-{
-  "id": int,
-  "vaga_id": int,
-  "data_registro": datetime,
-  "usuario_id": int,
-  "usuario_nome": str,
-  "acao": str,
-  "status_anterior": str | None,
-  "status_novo": str | None,
-  "justificativa": str | None
-}
-```
-
-## Funil seletivo
-
-O campo `etapa_funil` usa valores de 1 a 9:
-
-| Etapa | Nome |
-|---|---|
-| 1 | Fila de Espera |
-| 2 | Divulgação |
-| 3 | Triagem |
-| 4 | Entrevista Inicial |
-| 5 | Testes Psicológicos |
-| 6 | Parecer Psicológico |
-| 7 | Entrevista com Gestor |
-| 8 | Aguardando Retorno |
-| 9 | Finalizada |
-
-Quando a vaga chega na etapa 9, `data_finalizacao` é preenchida automaticamente. Se voltar para uma etapa anterior, a finalização é removida.
-
-## Regras importantes
-
-- Vagas começam com decisão `Pendente` e etapa `1`.
-- O RH pode mudar decisão para `Pendente`, `Aprovada`, `Congelada` ou `Negada`.
-- Uma vaga `Negada` exige justificativa.
-- Cada novo congelamento incrementa `quantidade_congelamentos`.
-- O sistema registra histórico de decisões em `vagas_historico`.
-- Mudanças de decisão e mudanças de etapa notificam o gestor por e-mail.
-- Para gestores, `GET /vagas` retorna somente vagas criadas pelo próprio usuário.
-- Relatórios gerais e exportações são exclusivos do perfil `RH`.
-- Cadastro e reset de senha de gestor não registram senha em log nem retornam senha pela API.
-
-## Desenvolvimento local
+| Frontend | `http://localhost:4200` |
+| Backend | `http://localhost:3007` |
+| Healthcheck | `http://localhost:3007/health` |
+| Swagger | `http://localhost:3007/docs` |
+| OpenAPI | `http://localhost:3007/openapi.json` |
+| PostgreSQL | `localhost:5432` |
+
+## Execução Local sem Docker
 
 ### Backend
 
@@ -408,7 +224,7 @@ pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 3007
 ```
 
-Se o backend rodar fora do Docker, configure `DB_URL` para apontar para o Postgres local ou para o Postgres publicado pelo Compose:
+Configure o banco:
 
 ```env
 DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
@@ -422,97 +238,318 @@ npm install
 npm start
 ```
 
-O serviço Angular chama o backend em:
+No modo de desenvolvimento, `frontend/src/environments/environment.ts` aponta para `http://localhost:3007`.
+
+## Variáveis de Ambiente
+
+### Banco
+
+```env
+DATABASE_URL=postgresql+psycopg2://usuario:senha@host:5432/banco
+DB_URL=postgresql+psycopg2://feedrh:feedrh@localhost:5432/feedrh
+DB_CONNECT_RETRIES=10
+DB_CONNECT_RETRY_SECONDS=2
+```
+
+O backend prioriza `DATABASE_URL`. `DB_URL` é útil no ambiente local.
+
+### Frontend e Proxy
+
+```env
+API_URL=/api
+BACKEND_URL=https://api.seudominio.com
+BACKEND_HOST=api.seudominio.com
+APP_URL=https://frontend.seudominio.com
+```
+
+### SMTP
+
+```env
+MAIL_HOST=mail.seudominio.com
+MAIL_PORT=465
+MAIL_USER=usuario_smtp
+MAIL_PASSWORD=senha_smtp
+MAIL_FROM=email_remetente
+MAIL_FROM_NAME=Sistema de Recrutamento
+MAIL_USE_TLS=false
+MAIL_USE_SSL=true
+```
+
+### Logs
+
+```env
+LOG_LEVEL=INFO
+```
+
+## Dados Iniciais
+
+Quando o banco está vazio, o backend cria empresas e usuários padrão.
+
+Empresas:
+
+- Elevare
+- Ora Empresas
+- Mercado do Provedor
+- Mercado do Construtor
+- Outra
+
+Usuários:
+
+| Perfil | E-mail | Senha |
+|---|---|---|
+| RH | `rh@feedrh.com` | `rh@123` |
+| Gestor | `gestor@feedrh.com` | `gestor@123` |
+
+## Rotas do Frontend
+
+| Rota | Tela | Acesso |
+|---|---|---|
+| `/login` | Login | Público |
+| `/recuperar-senha` | Solicitação de recuperação | Público |
+| `/redefinir-senha` | Redefinição de senha por token | Público |
+| `/dashboard` | Dashboard de vagas | RH e Gestor |
+| `/vagas/nova` | Nova vaga | RH e Gestor |
+| `/rh/usuarios` | Gestão de usuários e empresas | RH |
+| `/rh/decisoes` | Painel de decisão | RH |
+| `/rh/relatorios` | Relatórios | RH |
+
+## API do Backend
+
+As rotas internas do FastAPI não usam prefixo `/api`. O prefixo `/api` existe apenas no Nginx do frontend.
+
+### Healthcheck e Documentação
+
+```http
+GET /health
+GET /docs
+GET /openapi.json
+```
+
+### Autenticação
+
+```http
+POST /auth/login
+POST /auth/forgot-password
+POST /auth/reset-password
+```
+
+O frontend chama essas rotas como:
 
 ```text
-http://localhost:3007
+/api/auth/login
+/api/auth/forgot-password
+/api/auth/reset-password
 ```
 
-No build de produção, o Angular usa `/api` por padrão e depende do proxy configurado em `frontend/nginx.conf`.
+### Usuários
 
-## Testes e validações úteis
-
-Build do frontend:
-
-```bash
-cd frontend
-npm run build
+```http
+POST   /users
+GET    /users
+PATCH  /users/{user_id}
+POST   /users/{user_id}/reset-password
+DELETE /users/{user_id}
 ```
 
-Checagem de sintaxe do backend:
+As rotas de usuários exigem perfil `RH`. O reset pelo RH só aceita usuários `GESTOR`, gera senha temporária segura e não retorna a senha na resposta.
+
+### Empresas
+
+```http
+GET    /empresas
+POST   /empresas
+PATCH  /empresas/{empresa_id}
+DELETE /empresas/{empresa_id}
+```
+
+`GET /empresas` exige usuário autenticado. Criação, edição e remoção exigem perfil `RH`.
+
+### Vagas
+
+```http
+POST  /vagas
+GET   /vagas
+PATCH /vagas/{vaga_id}/decisao-diretoria
+PATCH /vagas/{vaga_id}/etapa-funil
+GET   /vagas/relatorio
+GET   /vagas/relatorio/pdf
+GET   /vagas/relatorio/excel
+```
+
+Filtros aceitos em listagem e relatórios:
+
+```text
+gestor_id
+empresa
+senioridade
+etapa_funil=1..9
+status_decisao=Pendente|Aprovada|Congelada|Negada
+data_inicio=YYYY-MM-DD
+data_fim=YYYY-MM-DD
+```
+
+Relatórios e exportações são restritos ao perfil `RH`.
+
+## Autenticação Atual
+
+O login retorna o usuário autenticado. O frontend armazena o usuário no `localStorage` e envia o ID nas chamadas protegidas:
+
+```http
+X-User-Id: 1
+```
+
+Esse modelo é simples e adequado ao estágio atual do projeto. Antes de produção crítica, recomenda-se trocar para tokens assinados.
+
+## Regras de Negócio
+
+- Vagas começam como `Pendente` e na etapa `1`.
+- O RH pode alterar decisão para `Pendente`, `Aprovada`, `Congelada` ou `Negada`.
+- Vaga `Negada` exige justificativa.
+- Cada novo congelamento incrementa `quantidade_congelamentos`.
+- O sistema registra histórico em `vagas_historico`.
+- Mudanças de decisão e etapa notificam o gestor por e-mail.
+- Gestores veem apenas as próprias vagas.
+- Relatórios gerais e exportações são exclusivos do RH.
+- Cadastro e reset de senha de gestor não registram senha em log e não retornam senha pela API.
+
+## Funil Seletivo
+
+| Etapa | Nome |
+|---|---|
+| 1 | Fila de Espera |
+| 2 | Divulgação |
+| 3 | Triagem |
+| 4 | Entrevista Inicial |
+| 5 | Testes Psicológicos |
+| 6 | Parecer Psicológico |
+| 7 | Entrevista com Gestor |
+| 8 | Aguardando Retorno |
+| 9 | Finalizada |
+
+Quando a vaga chega na etapa `9`, `data_finalizacao` é preenchida. Se voltar para etapa anterior, a finalização é removida.
+
+## Validações Úteis
+
+Checar backend:
 
 ```bash
 PYTHONPYCACHEPREFIX=/private/tmp/feedrh_pycache python3 -m py_compile backend/main.py
 ```
 
-Ver logs:
+Validar Compose:
 
 ```bash
-docker-compose logs backend
-docker-compose logs frontend
-docker-compose logs db
+BACKEND_URL=http://backend:3007 BACKEND_HOST=backend docker compose config --quiet
 ```
 
-Entrar no banco:
+Subir localmente:
 
 ```bash
-docker-compose exec db psql -U feedrh -d feedrh
+BACKEND_URL=http://backend:3007 BACKEND_HOST=backend docker compose up --build
 ```
 
-## Limpeza do banco local
-
-Para apagar os dados das tabelas principais e resetar IDs:
+Testar rotas:
 
 ```bash
-docker-compose up -d db
-docker-compose exec db psql -U feedrh -d feedrh -c "TRUNCATE TABLE vagas_historico, vagas, users, empresas RESTART IDENTITY CASCADE;"
-docker-compose up -d backend
+curl http://localhost:3007/health
+curl http://localhost:4200/api/health
+curl -X POST http://localhost:4200/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"rh@feedrh.com","senha":"rh@123"}'
 ```
 
-Ao subir o backend novamente, os dados padrão são recriados.
-
-Para apagar também o volume do PostgreSQL:
+Validar Nginx dentro do container:
 
 ```bash
-docker-compose down -v
+BACKEND_URL=http://backend:3007 BACKEND_HOST=backend docker compose exec frontend nginx -t
 ```
 
-## Solução de problemas
+## Solução de Problemas
 
-### Frontend não conecta no backend
+### Frontend chama `/DOMINIO_BACKEND/auth/...`
 
-- Verifique se o backend está em `http://localhost:3007`.
-- Se estiver usando Docker/produção, verifique também `http://localhost:4200/api/docs`; esse caminho deve ser encaminhado pelo Nginx para o Swagger do backend.
-- Confira o console do navegador.
-- Veja `docker-compose logs backend`.
-- Veja `docker-compose logs frontend` se o erro envolver proxy, `502` ou rota `/api`.
+Isso indica que `API_URL` foi configurada de forma incorreta no build do Angular.
+
+Correção:
+
+```env
+API_URL=/api
+```
+
+O domínio do backend deve ficar apenas em:
+
+```env
+BACKEND_URL=https://api.seudominio.com
+BACKEND_HOST=api.seudominio.com
+```
+
+### Nginx falha com `host not found in upstream "backend"`
+
+Esse erro ocorre quando o Nginx tenta usar `backend` como hostname, mas frontend e backend estão em apps separados no Coolify.
+
+Correção:
+
+- Configure `BACKEND_URL` com a URL pública do backend.
+- Configure `BACKEND_HOST` com o host público do backend.
+- Redeploy do frontend.
+
+### Backend público retorna `404` em `/health`
+
+O app do backend no Coolify provavelmente não está apontando para o Dockerfile/pasta corretos ou ainda não foi redeployado.
+
+Verifique:
+
+- Base Directory: `/backend`
+- Dockerfile Location: `/Dockerfile`
+- Porta interna: `3007`
+- Logs de startup com `FeedRH API iniciada na porta 3007`
+
+### Erro de CORS no login
+
+Configure no backend:
+
+```env
+APP_URL=https://frontend.seudominio.com
+```
+
+Se houver mais de uma origem:
+
+```env
+CORS_ORIGINS=https://frontend.seudominio.com,https://outro-dominio.com
+```
 
 ### E-mail não é enviado
 
-- Confira `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM`.
-- Para porta `465`, use `MAIL_USE_SSL=true` e `MAIL_USE_TLS=false`.
-- Para porta `587`, use `MAIL_USE_SSL=false` e `MAIL_USE_TLS=true`.
-- Verifique se o provedor SMTP permite envio pelo usuário configurado.
-- Veja os erros completos em `docker-compose logs backend`.
+Confira as variáveis SMTP e os logs do backend.
 
-### Banco não inicia
+Para SSL na porta `465`:
 
-- Veja o status com `docker-compose ps`.
-- Confira `docker-compose logs db`.
-- Se for um ambiente local descartável, recrie o volume com `docker-compose down -v`.
+```env
+MAIL_USE_SSL=true
+MAIL_USE_TLS=false
+```
+
+Para STARTTLS na porta `587`:
+
+```env
+MAIL_USE_SSL=false
+MAIL_USE_TLS=true
+```
 
 ## Segurança
 
-- `.env` contém credenciais e não deve ser versionado.
-- `.env.example` deve conter apenas chaves e valores de exemplo.
-- As senhas de usuários são armazenadas como hash SHA-256. Para produção, recomenda-se migrar para um algoritmo próprio para senhas, como bcrypt ou Argon2.
-- O controle de sessão atual é simples e baseado em `X-User-Id`, adequado para o estágio atual do projeto, mas deve evoluir para tokens assinados antes de produção.
+- Nunca versione `.env`.
+- Não versionar credenciais reais.
+- `.env.example` deve conter apenas exemplos.
+- As senhas são armazenadas como hash SHA-256; para produção crítica, recomenda-se migrar para bcrypt ou Argon2.
+- O modelo atual de sessão usa `X-User-Id`; recomenda-se evoluir para autenticação com token assinado.
 
-## Documentação adicional
+## Documentação Complementar
 
-- `REFERENCIA_RAPIDA.md`: comandos e mapa rápido do projeto.
-- `DESENVOLVIMENTO.md`: notas de desenvolvimento.
-- `DEPLOYMENT.md`: orientação de deploy.
+- `REFERENCIA_RAPIDA.md`: mapa rápido do projeto.
+- `DESENVOLVIMENTO.md`: notas e fluxo de desenvolvimento.
+- `DEPLOYMENT.md`: orientações históricas de deploy.
+- `ARQUITETURA.md`: anotações de arquitetura.
 
 ## Licença
 
