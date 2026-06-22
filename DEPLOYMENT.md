@@ -349,14 +349,7 @@ http {
             try_files $uri $uri/ /index.html;
         }
 
-        # API proxy
-        location /api {
-            proxy_pass http://backend:8000;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
+        # API calls are made directly by Angular using API_URL.
     }
 }
 ```
@@ -481,24 +474,9 @@ def list_users(db: Session = Depends(get_db)):
     return db.query(UserModel).all()
 ```
 
-### Load Balancing (Nginx)
+### Load Balancing
 
-```nginx
-upstream backend {
-    server backend1:8000;
-    server backend2:8000;
-    server backend3:8000;
-}
-
-server {
-    location /api {
-        proxy_pass http://backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
-```
+Configure balanceamento no app/servico do backend ou no proxy da plataforma. O Nginx do frontend deve continuar servindo apenas os arquivos estaticos da SPA Angular.
 
 ---
 

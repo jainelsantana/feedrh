@@ -83,27 +83,21 @@ Em produção, o frontend e o backend são apps separados.
 ```text
 Navegador
   -> Frontend Angular servido por Nginx
-  -> /api/*
-  -> Nginx do frontend
-  -> BACKEND_URL/*
+  -> API_URL configurada no build
   -> FastAPI
   -> PostgreSQL
   -> SMTP
 ```
 
-O Angular sempre chama a API por caminho relativo:
+O Angular sempre chama a API usando `environment.apiUrl`, gerado no build a partir de `API_URL`:
 
 ```text
-/api/auth/login
-/api/auth/forgot-password
-/api/vagas
+API_URL/auth/login
+API_URL/auth/forgot-password
+API_URL/vagas
 ```
 
-O Nginx do frontend remove o prefixo `/api/` ao encaminhar para o backend. Assim:
-
-```text
-/api/auth/login -> BACKEND_URL/auth/login
-```
+O Nginx do frontend serve apenas os arquivos estaticos da SPA Angular; ele nao faz proxy de API.
 
 ### Desenvolvimento local
 
@@ -165,18 +159,15 @@ CORS_ORIGINS=https://frontend.seudominio.com,https://outro-dominio.com
 Variáveis esperadas:
 
 ```env
-API_URL=/api
-BACKEND_URL=https://api.seudominio.com
-BACKEND_HOST=api.seudominio.com
+API_URL=https://api.seudominio.com
 ```
 
 Regras importantes:
 
-- `API_URL` deve ser sempre relativo, normalmente `/api`.
-- O build rejeita `API_URL` absoluto, como `https://api.seudominio.com`.
-- `BACKEND_URL` deve incluir protocolo e não deve terminar com barra.
-- `BACKEND_HOST` deve conter apenas o host que será enviado no header `Host`.
-- O Nginx gera o arquivo final de configuração em runtime usando `BACKEND_URL` e `BACKEND_HOST`.
+- `API_URL` deve ser configurado no build do frontend.
+- `API_URL` pode ser relativo, como `/api`, ou absoluto, como `https://api.seudominio.com`.
+- Em frontend e backend separados no Coolify, use a URL publica do backend em `API_URL`.
+- O Nginx do frontend nao usa `BACKEND_URL`, `BACKEND_HOST` nem proxy `/api`.
 
 ## Execução Local com Docker
 
@@ -190,8 +181,6 @@ Para usar o Compose local, configure no `.env`:
 
 ```env
 API_URL=/api
-BACKEND_URL=http://backend:3007
-BACKEND_HOST=backend
 APP_URL=http://localhost:4200
 ```
 
@@ -253,12 +242,10 @@ DB_CONNECT_RETRY_SECONDS=2
 
 O backend prioriza `DATABASE_URL`. `DB_URL` é útil no ambiente local.
 
-### Frontend e Proxy
+### Frontend
 
 ```env
-API_URL=/api
-BACKEND_URL=https://api.seudominio.com
-BACKEND_HOST=api.seudominio.com
+API_URL=https://api.seudominio.com
 APP_URL=https://frontend.seudominio.com
 ```
 
@@ -439,21 +426,20 @@ PYTHONPYCACHEPREFIX=/private/tmp/feedrh_pycache python3 -m py_compile backend/ma
 Validar Compose:
 
 ```bash
-BACKEND_URL=http://backend:3007 BACKEND_HOST=backend docker compose config --quiet
+API_URL=/api docker compose config --quiet
 ```
 
 Subir localmente:
 
 ```bash
-BACKEND_URL=http://backend:3007 BACKEND_HOST=backend docker compose up --build
+API_URL=/api docker compose up --build
 ```
 
 Testar rotas:
 
 ```bash
 curl http://localhost:3007/health
-curl http://localhost:4200/api/health
-curl -X POST http://localhost:4200/api/auth/login \
+curl -X POST http://localhost:3007/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"rh@feedrh.com","senha":"rh@123"}'
 ```
@@ -461,37 +447,30 @@ curl -X POST http://localhost:4200/api/auth/login \
 Validar Nginx dentro do container:
 
 ```bash
-BACKEND_URL=http://backend:3007 BACKEND_HOST=backend docker compose exec frontend nginx -t
+docker compose exec frontend nginx -t
 ```
 
 ## Solução de Problemas
 
-### Frontend chama `/DOMINIO_BACKEND/auth/...`
+### Frontend chama `/api/auth/...` em producao
 
-Isso indica que `API_URL` foi configurada de forma incorreta no build do Angular.
+Isso indica que `API_URL` foi configurada como caminho relativo no build do Angular, ou que o frontend foi redeployado com uma imagem antiga.
 
-Correção:
-
-```env
-API_URL=/api
-```
-
-O domínio do backend deve ficar apenas em:
+Correcao:
 
 ```env
-BACKEND_URL=https://api.seudominio.com
-BACKEND_HOST=api.seudominio.com
+API_URL=https://api.seudominio.com
 ```
 
-### Nginx falha com `host not found in upstream "backend"`
+### Nginx falha com `host not found in upstream`
 
-Esse erro ocorre quando o Nginx tenta usar `backend` como hostname, mas frontend e backend estão em apps separados no Coolify.
+Esse erro indica que o frontend ainda esta rodando uma configuracao antiga com proxy de API no Nginx.
 
-Correção:
+Correcao:
 
-- Configure `BACKEND_URL` com a URL pública do backend.
-- Configure `BACKEND_HOST` com o host público do backend.
-- Redeploy do frontend.
+- Remova `BACKEND_URL` e `BACKEND_HOST` do app frontend.
+- Configure `API_URL` com a URL publica do backend.
+- Force rebuild/redeploy do frontend.
 
 ### Backend público retorna `404` em `/health`
 
