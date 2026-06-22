@@ -386,7 +386,7 @@ class EtapaFunilUpdate(BaseModel):
 
 RESET_PASSWORD_PUBLIC_MESSAGE = "Se o e-mail informado estiver cadastrado, você receberá instruções para redefinir sua senha."
 RESET_PASSWORD_EXPIRED_MESSAGE = "Link inválido ou expirado. Solicite uma nova recuperação de senha."
-DEFAULT_FRONTEND_URL = "http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io"
+LOCAL_FRONTEND_URLS = ("http://localhost:4200", "http://127.0.0.1:4200")
 
 def add_origin_with_scheme_variants(origins: set[str], origin: str) -> None:
     clean_origin = origin.strip().rstrip("/")
@@ -401,7 +401,7 @@ def add_origin_with_scheme_variants(origins: set[str], origin: str) -> None:
 
 def get_cors_origins() -> List[str]:
     origins: set[str] = set()
-    for default_origin in ("http://localhost:4200", "http://127.0.0.1:4200", DEFAULT_FRONTEND_URL):
+    for default_origin in LOCAL_FRONTEND_URLS:
         add_origin_with_scheme_variants(origins, default_origin)
 
     for env_name in ("APP_URL", "FRONTEND_URL", "CORS_ORIGINS"):
@@ -414,6 +414,9 @@ def get_cors_origins() -> List[str]:
     return sorted(origins)
 
 ALLOWED_CORS_ORIGINS = get_cors_origins()
+
+def get_app_url() -> str:
+    return (os.getenv("APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:4200").rstrip("/")
 
 # FastAPI App
 app = FastAPI(title="FeedRh API")
@@ -704,7 +707,7 @@ def montar_email_recuperacao_senha_html(nome: str, link: str) -> str:
 def montar_email_avanco_html(vaga: VagaModel, gestor: UserModel, resumo: str) -> str:
     etapa_nome = ETAPAS_FUNIL.get(vaga.etapa_funil, f"Etapa {vaga.etapa_funil}")
     progresso = max(0, min(100, round(((vaga.etapa_funil or 1) / 9) * 100)))
-    app_url = (os.getenv("APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:4200").rstrip("/")
+    app_url = get_app_url()
     dashboard_url = f"{app_url}/dashboard"
 
     cargo = escape(vaga.cargo or "Vaga")
@@ -900,7 +903,7 @@ def gerar_senha_temporaria(tamanho: int = 14) -> str:
     return "".join(senha)
 
 def montar_email_acesso_gestor_texto(usuario: UserModel, senha_temporaria: str, reset: bool = False) -> str:
-    app_url = (os.getenv("APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:4200").rstrip("/")
+    app_url = get_app_url()
     acao = "sua senha foi redefinida" if reset else "seu acesso foi criado"
     return (
         f"Olá{', ' + usuario.nome if usuario.nome else ''},\n\n"
@@ -916,7 +919,7 @@ def montar_email_acesso_gestor_texto(usuario: UserModel, senha_temporaria: str, 
     )
 
 def montar_email_acesso_gestor_html(usuario: UserModel, senha_temporaria: str, reset: bool = False) -> str:
-    app_url = (os.getenv("APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:4200").rstrip("/")
+    app_url = get_app_url()
     titulo = "Nova senha FeedRH" if reset else "Acesso ao FeedRH"
     subtitulo = "Sua senha temporária foi gerada." if reset else "Seu cadastro de gestor foi criado."
     usuario_nome = escape(usuario.nome or "Gestor")
@@ -1413,11 +1416,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
         db.add(reset_token)
         db.commit()
 
-        app_url = (
-            os.getenv("APP_URL")
-            or os.getenv("FRONTEND_URL")
-            or "http://localhost:4200"
-        ).rstrip("/")
+        app_url = get_app_url()
         reset_url = f"{app_url}/redefinir-senha?token={token}"
         assunto = "Redefinição de senha - FEEDRH"
         corpo = (

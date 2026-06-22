@@ -47,6 +47,9 @@ services:
       dockerfile: Dockerfile
       args:
         API_URL: ${API_URL:-/api}
+    environment:
+      BACKEND_URL: ${BACKEND_URL:?BACKEND_URL is required}
+      BACKEND_HOST: ${BACKEND_HOST:?BACKEND_HOST is required}
     ports:
       - "4200:80"
     depends_on:

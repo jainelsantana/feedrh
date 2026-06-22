@@ -116,7 +116,7 @@ No Coolify, o deploy atual foi preparado para frontend e backend como apps separ
 
 - Backend: base directory `/backend`, Dockerfile `/Dockerfile`, porta interna `3007`.
 - Frontend: base directory `/frontend`, Dockerfile `/Dockerfile`, porta interna `80`.
-- O `frontend/nginx.conf` encaminha `/api/` para `http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io/`.
+- O `frontend/nginx.conf` é um template; no runtime ele encaminha `/api/` para `${BACKEND_URL}/`.
 - Configure no backend `APP_URL=http://hmbgdyv3n1mj4f25215v7ttd.138.121.128.232.sslip.io` para liberar a origem pública do frontend no CORS. O backend também aceita a variante `https` dessa origem.
 
 Nao use `proxy_pass http://backend:3007/` quando frontend e backend forem apps separados no Coolify, pois esse hostname só existe quando ambos estão no mesmo Docker Compose/rede Docker.
@@ -131,6 +131,13 @@ E usa este padrão no build do frontend:
 
 ```env
 API_URL=/api
+```
+
+No app frontend do Coolify, configure também:
+
+```env
+BACKEND_URL=http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
+BACKEND_HOST=itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
 ```
 
 ## Configuração do `.env`
@@ -152,6 +159,9 @@ MAIL_USE_TLS=true
 MAIL_USE_SSL=false
 APP_URL=http://localhost:4200
 API_URL=/api
+BACKEND_URL=http://itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
+BACKEND_HOST=itayepckhl0wh3m5gh64w7y9.138.121.128.232.sslip.io
+LOG_LEVEL=INFO
 ```
 
 Exemplo para SMTP com SSL na porta 465:
@@ -167,10 +177,13 @@ MAIL_USE_TLS=false
 MAIL_USE_SSL=true
 APP_URL=http://localhost:4200
 API_URL=/api
+BACKEND_URL=https://api.seudominio.com.br
+BACKEND_HOST=api.seudominio.com.br
 ```
 
 `APP_URL` é usado nos botões e links dos e-mails de avanço, acesso inicial e reset de senha, e também entra na lista de origens permitidas pelo CORS do backend.
-`API_URL` é usada no build do frontend. Em produção, mantenha `/api`; o Nginx do frontend é quem encaminha a requisição para o backend público.
+`API_URL` é usada no build do frontend. Em produção, mantenha `/api`; o build rejeita URL absoluta para evitar que o Angular chame o domínio do backend diretamente.
+`BACKEND_URL` e `BACKEND_HOST` são usadas pelo Nginx do frontend em runtime, sem rebuild do Angular.
 `LOG_LEVEL` controla o nível dos logs do backend; use `INFO` no Coolify para ver startup, CORS e rotas principais nos logs.
 
 ## Dados iniciais
